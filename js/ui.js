@@ -126,14 +126,20 @@ function renderMiniShelf(sid) {
     const nearEnd = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
     const hasDisc = item.discount > 0;
 
+    const isHot  = G.weeklyForecast.hot.includes(item.productId);
+    const isCold = G.weeklyForecast.cold.includes(item.productId);
+
     let slotClass = '';
-    if (oos && !hasDisc)  slotClass = ' out-season';
-    else if (oos)         slotClass = ' out-season discounted';
-    else if (nearEnd && !hasDisc) slotClass = ' warn';
+    if (oos && !hasDisc)           slotClass = ' out-season';
+    else if (oos)                  slotClass = ' out-season discounted';
+    else if (nearEnd && !hasDisc)  slotClass = ' warn';
+    if (isHot)                     slotClass += ' trend-hot';
+    else if (isCold)               slotClass += ' trend-cold';
 
     const discBadge = hasDisc ? `<span class="mini-disc">-${Math.round(item.discount*100)}%</span>` : '';
     const oosBadge  = oos && !hasDisc ? `<span class="mini-oos">↓1</span>` : '';
-    const tooltip   = `${prod.name} ×${item.qty}${oos ? ' · ⚠ Hors saison (-1/sem)' : ''}${hasDisc ? ` · -${Math.round(item.discount*100)}%` : ''}`;
+    const trendTip  = isHot ? ' · 🔥 Hausse prévue' : (isCold ? ' · ❄️ Baisse prévue' : '');
+    const tooltip   = `${prod.name} ×${item.qty}${oos ? ' · ⚠ Hors saison' : ''}${hasDisc ? ` · -${Math.round(item.discount*100)}%` : ''}${trendTip}`;
 
     html += `<div class="mini-slot${slotClass}" title="${tooltip}">${prod.icon}${discBadge}${oosBadge}<span class="mini-qty">×${item.qty}</span></div>`;
     shown++;
@@ -307,6 +313,13 @@ function renderSupplierModal(sid) {
       }).join('')}
     </div>`).join('');
 
+  const cartHtml = cart.length === 0
+    ? `<p class="empty-stock">Aucun article commandé.</p>`
+    : cart.map(c => {
+        const promoTxt = c.promoRate > 0 ? ` <span class="promo-rate-badge">-${Math.round(c.promoRate*100)}%</span>` : '';
+        return `<div class="cart-item">${productDef(c.productId).icon} ${productDef(c.productId).name} ×${c.qty}<br><small>${fmt(c.qty * c.unitPrice)}${promoTxt}</small></div>`;
+      }).join('');
+
   showModal(`
     <h2>${def.icon} ${def.name} — Commande fournisseur
       ${isPromoSection ? '<span class="promo-header-badge">🏷️ SEMAINE PROMO</span>' : ''}
@@ -315,16 +328,14 @@ function renderSupplierModal(sid) {
       <span>Slots : <strong>${used}/${total}</strong> (${free} libre${free !== 1 ? 's' : ''})</span>
       <span>Caisse : ${fmt(G.money)}</span>
     </div>
-    <div class="suppliers-list">${suppliersHtml}</div>
-    <div class="cart-summary">
-      <strong>🛒 Panier : ${cart.length} ligne(s) — ${fmt(cartTotal)}</strong>
-      ${cart.map(c => {
-        const promoTxt = c.promoRate > 0 ? ` <span class="promo-rate-badge">-${Math.round(c.promoRate*100)}%</span>` : '';
-        return `<div class="cart-item">${productDef(c.productId).icon} ${productDef(c.productId).name} ×${c.qty} = ${fmt(c.qty * c.unitPrice)}${promoTxt}</div>`;
-      }).join('')}
-    </div>
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeModal()">✓ Valider ce rayon</button>
+    <div class="supplier-modal-body">
+      <div class="suppliers-list">${suppliersHtml}</div>
+      <div class="cart-panel">
+        <div class="cart-panel-title">🛒 Panier</div>
+        <div class="cart-panel-items">${cartHtml}</div>
+        <div class="cart-panel-total">Total : <strong>${fmt(cartTotal)}</strong></div>
+        <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="closeModal()">✓ Valider</button>
+      </div>
     </div>
   `);
 }
@@ -465,7 +476,7 @@ function renderAllocationModal(sid) {
             <div class="alloc-name-row">
               <strong>${prod.name}</strong>${trendTag}${promoTag}
             </div>
-            <small>×${r.qty} · achat <strong>${fmt(r.buyPrice)}/u</strong> · vente ${fmt(catalogSellPrice(r.productId))}/u
+            <small>achat <strong>${fmt(r.buyPrice)}/u</strong> · vente ${fmt(catalogSellPrice(r.productId))}/u
               · bén. <strong class="${profitPerUnit > 0 ? 'profit-pos' : 'profit-neg'}">${fmt(profitPerUnit)}/u</strong>
             </small>
             <div class="alloc-tags">${slotInfo}${oosTag}</div>
@@ -473,7 +484,7 @@ function renderAllocationModal(sid) {
         </div>
         <button class="btn-alloc-place ${canMove ? '' : 'disabled'}"
           onclick="${canMove ? `doMoveToShelf('${sid}', '${r.productId}')` : ''}">
-          ${canMove ? '📤 En rayon' : '⛔ Slot plein'}
+          ${canMove ? `📤 En rayon <span class="btn-alloc-qty">×${r.qty}</span>` : '⛔ Slot plein'}
         </button>
       </div>`;
   }).join('');
@@ -494,6 +505,8 @@ function renderAllocationModal(sid) {
       </div>
     </div>
 
+    ${renderTop3AllocWidget()}
+
     ${canPlaceAll
       ? `<button class="btn-alloc-all" onclick="doMoveAllToShelf('${sid}')">📤 Tout mettre en rayon</button>`
       : `<div class="alloc-noplaceall">⚠️ Slots insuffisants pour tout placer — placez manuellement ou achetez un slot.</div>`}
@@ -501,7 +514,6 @@ function renderAllocationModal(sid) {
     <div class="alloc-list">${reserveRows}</div>
 
     ${renderShelfDiscounts(sid)}
-    ${renderSlotBuySection(sid)}
 
     <details class="alloc-shelf-details">
       <summary>🛍️ Déjà en rayon (${sec.stock.length} type${sec.stock.length !== 1 ? 's' : ''})</summary>
@@ -510,6 +522,7 @@ function renderAllocationModal(sid) {
 
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal()">← Retour à la carte</button>
+      ${renderSlotBuyInline(sid)}
     </div>
   `);
 }
@@ -532,10 +545,17 @@ function renderShelfDiscounts(sid) {
     const oos     = isOutOfSeason(item.productId);
     const discPct = Math.round(item.discount * 100);
     const sellAmt = sellPrice(item.productId, item.discount);
-    return `<div class="discount-row ${oos ? 'oos-row' : ''}">
-      <span>${prod.icon} <strong>${prod.name}</strong>
-        ${oos ? '<span class="badge-oos" style="font-size:0.65rem">🍂</span>' : ''}
+    const isHot   = G.weeklyForecast.hot.includes(item.productId);
+    const isCold  = G.weeklyForecast.cold.includes(item.productId);
+    const trendCls = isHot ? 'disc-trend-hot' : (isCold ? 'disc-trend-cold' : '');
+    const trendTag = isHot
+      ? '<span class="disc-trend-badge hot">🔥 Hausse</span>'
+      : (isCold ? '<span class="disc-trend-badge cold">❄️ Baisse</span>' : '');
+    return `<div class="discount-row ${oos ? 'oos-row' : ''} ${trendCls}">
+      <span class="disc-row-name">${prod.icon} <strong>${prod.name}</strong>
+        ${trendTag}${oos ? '<span class="badge-oos" style="font-size:0.65rem;margin-left:3px">🍂</span>' : ''}
       </span>
+      <span class="disc-qty-badge">×${item.qty}</span>
       <span class="disc-sell-preview">Vente : ${fmt(sellAmt)}</span>
       <div class="discount-ctrl">
         <label>Remise : <strong id="dlbl-${item.id}">${discPct}%</strong></label>
@@ -551,16 +571,36 @@ function renderShelfDiscounts(sid) {
   </div>`;
 }
 
-function renderSlotBuySection(sid) {
-  const sec  = G.sections[sid];
+function renderSlotBuyInline(sid) {
   const total = sectionCapacity(sid);
-  if (total >= MAX_SLOTS) return '';
-  const cost     = nextSlotCost(sid);
-  const canBuy   = G.money >= cost;
-  return `<div class="slot-buy-section">
-    <button class="btn-upgrade ${canBuy ? '' : 'disabled'}" onclick="${canBuy ? `doBuySlotAlloc('${sid}')` : ''}">
-      📐 Acheter un slot — ${fmt(cost)} (${total + 1}/${MAX_SLOTS})
-    </button>
+  if (total >= MAX_SLOTS) return `<span class="max-level">✅ Max slots</span>`;
+  const cost   = nextSlotCost(sid);
+  const canBuy = G.money >= cost;
+  return `<button class="btn-upgrade ${canBuy ? '' : 'disabled'}"
+    onclick="${canBuy ? `doBuySlotAlloc('${sid}')` : ''}">
+    📐 +1 slot — ${fmt(cost)}
+  </button>`;
+}
+
+function renderTop3AllocWidget() {
+  if (G.week === 1) return '';
+  const top = getTop3LastWeek(3);
+  if (top.length === 0) return '';
+  const rows = top.map((item, i) => {
+    const prod = productDef(item.productId);
+    const isHot  = G.weeklyForecast.hot.includes(item.productId);
+    const isCold = G.weeklyForecast.cold.includes(item.productId);
+    const trend  = isHot ? '<span class="alloc-trend hot">🔥</span>' : (isCold ? '<span class="alloc-trend cold">❄️</span>' : '');
+    return `<div class="top3-alloc-row">
+      <span class="top3-alloc-rank">${i+1}</span>
+      <span>${prod.icon}</span>
+      <span class="top3-alloc-name">${prod.name}${trend}</span>
+      <span class="top3-alloc-stat">×${item.qty} · ${fmt(item.profit)} bén.</span>
+    </div>`;
+  }).join('');
+  return `<div class="top3-alloc-widget">
+    <div class="top3-alloc-title">🏆 Top 3 semaine précédente <span style="font-weight:400;font-size:0.7rem;color:var(--text-dim)">(qté × bénéfice)</span></div>
+    ${rows}
   </div>`;
 }
 
@@ -761,13 +801,14 @@ function showResultsModal(results) {
     totalProfit  += pft;
     const def = sectionDef(sectionId);
     if (!items.length) return `<div class="result-section"><div class="result-section-header">${def.icon} ${def.name} — <em>Aucune vente</em></div></div>`;
+    const sorted = [...items].sort((a, b) => (b.sold * b.profit) - (a.sold * a.profit));
     return `
       <div class="result-section">
         <div class="result-section-header">${def.icon} ${def.name} — CA <strong>${fmt(rev)}</strong> · Bén. <strong class="profit-pos">${fmt(pft)}</strong></div>
-        ${items.map(r => {
+        ${sorted.map(r => {
           const prod = productDef(r.productId);
           const disc = r.wasDiscounted ? ` <span class="disc-label">-${Math.round(r.discount*100)}%</span>` : '';
-          return `<div class="result-row">${prod.icon} ${prod.name} — ${r.sold}× ${fmt(r.unitRevenue)}${disc} = <strong>${fmt(r.revenue)}</strong></div>`;
+          return `<div class="result-row">${prod.icon} ${prod.name} — ${r.sold}× ${fmt(r.unitRevenue)}${disc} = <strong>${fmt(r.revenue)}</strong> · bén. <span class="profit-pos">${fmt(r.profit)}</span></div>`;
         }).join('')}
       </div>`;
   }).join('');
@@ -957,6 +998,13 @@ function showToast(msg, type = 'info') {
   document.body.appendChild(t);
   requestAnimationFrame(() => t.classList.add('visible'));
   setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 400); }, 3000);
+}
+
+function toggleLog() {
+  const sidebar = el('sidebar');
+  const icon    = el('log-toggle-icon');
+  sidebar.classList.toggle('collapsed');
+  icon.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀';
 }
 
 function bindGlobalEvents() {

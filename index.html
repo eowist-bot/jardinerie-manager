@@ -59,8 +59,11 @@
     </div>
 
     <!-- Journal -->
-    <aside id="sidebar">
-      <div class="sidebar-title">📋 Journal</div>
+    <aside id="sidebar" class="collapsed">
+      <div class="sidebar-title" onclick="toggleLog()">
+        <span>📋 Journal</span>
+        <span id="log-toggle-icon">▶</span>
+      </div>
       <div id="log"></div>
     </aside>
 

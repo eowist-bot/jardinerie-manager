@@ -207,21 +207,22 @@ function generateSupplierOffers() {
 // Ces prévisions influencent les ventes de endWeek() à 90%.
 function generateWeeklyForecast() {
   G.weeklyForecast = { hot: [], cold: [] };
-  if (G.week === 1) return; // pas de données la 1ère semaine
 
-  // Candidats : produits actuellement en rayon
+  // Candidats : produits actuellement en rayon (ou en réserve semaine 1)
   const candidates = [];
   ownedSections().forEach(sid => {
     const seasonMult = SEASON_DEMAND[season()][sid] || 1.0;
-    G.sections[sid].stock.forEach(item => {
-      const prod    = productDef(item.productId);
-      const inSeason = !isOutOfSeason(item.productId);
-      const lastSale  = getLastWeekSales(item.productId);
-      const lastQty   = lastSale ? lastSale.qty : 0;
+    const items = G.sections[sid].stock.length > 0
+      ? G.sections[sid].stock
+      : G.sections[sid].reserve.map(r => ({ productId: r.productId }));
 
-      // Score "chaud" : en saison, forte demande section, bonne vente passée
+    items.forEach(item => {
+      const prod     = productDef(item.productId);
+      const inSeason = !isOutOfSeason(item.productId);
+      const lastSale = getLastWeekSales(item.productId);
+      const lastQty  = lastSale ? lastSale.qty : 0;
+
       const hotScore  = (inSeason ? 1 : 0) * seasonMult * (1 + lastQty * 0.1);
-      // Score "froid" : hors saison, faible demande, peu vendu, fin de saison
       const coldScore = (!inSeason ? 2 : 0)
         + (nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season()) ? 1.5 : 0)
         + (1 / (seasonMult + 0.1))
@@ -460,22 +461,37 @@ function checkEndOfSeasonWarnings() {
 }
 
 // ── Top ventes ───────────────────────────────────────────────
+// Top ventes semaine précédente — trié par qty × bénéfice
+function getTop3LastWeek(n = 3) {
+  if (G.salesHistory.length === 0) return [];
+  const last = G.salesHistory[G.salesHistory.length - 1];
+  return [...last.items]
+    .map(i => ({
+      ...i,
+      profit:     i.revenue - i.qty * (i.buyPrice || 0),
+      score:      i.qty * Math.max(0, i.revenue - i.qty * (i.buyPrice || 0)),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, n);
+}
+
 function getTopSales(n = 3, lastWeeks = 4) {
   if (G.salesHistory.length === 0) return [];
   const recent = G.salesHistory.slice(-lastWeeks);
   const totals = {};
   recent.forEach(w => {
     w.items.forEach(i => {
-      if (!totals[i.productId]) totals[i.productId] = { qty: 0, revenue: 0, weekCount: 0 };
+      if (!totals[i.productId]) totals[i.productId] = { qty: 0, revenue: 0, profit: 0, weekCount: 0 };
       totals[i.productId].qty       += i.qty;
       totals[i.productId].revenue   += i.revenue;
+      totals[i.productId].profit    += i.revenue - i.qty * (i.buyPrice || 0);
       totals[i.productId].weekCount++;
     });
   });
   return Object.entries(totals)
-    .sort((a, b) => b[1].revenue - a[1].revenue)
+    .sort((a, b) => (b[1].qty * b[1].profit) - (a[1].qty * a[1].profit))
     .slice(0, n)
-    .map(([pid, d]) => ({ productId: pid, qty: d.qty, revenue: d.revenue, weekCount: d.weekCount }));
+    .map(([pid, d]) => ({ productId: pid, qty: d.qty, revenue: d.revenue, profit: d.profit, weekCount: d.weekCount }));
 }
 
 function getSalesTrend(productId) {

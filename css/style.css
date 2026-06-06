@@ -111,11 +111,6 @@ html, body {
 .btn-hud.secondary:hover { background: var(--panel); }
 
 /* ── Corps principal : carte + log ──────────────────────────── */
-#main-body {
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  overflow: hidden;
-}
 
 /* ── Carte du magasin ───────────────────────────────────────── */
 #store-area {
@@ -327,22 +322,43 @@ html, body {
 .lock-cost { font-size: 0.85rem; font-weight: 700; color: var(--gold); }
 .tile-desc { font-size: 0.7rem; color: var(--text-dim); text-align: center; }
 
-/* ── Sidebar log ─────────────────────────────────────────────── */
+/* ── Sidebar log — dépliable ────────────────────────────────── */
+#main-body {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  overflow: hidden;
+  transition: grid-template-columns 0.25s ease;
+}
 #sidebar {
   background: #111d11;
   border-left: 2px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.25s ease;
 }
+#sidebar.collapsed {
+  width: 36px;
+  min-width: 36px;
+}
+#sidebar.collapsed #log { display: none; }
 .sidebar-title {
-  padding: 12px 14px;
+  padding: 10px 10px;
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--gold);
   border-bottom: 1px solid var(--border);
   background: var(--panel);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+  white-space: nowrap;
+  gap: 6px;
 }
+#sidebar.collapsed .sidebar-title { justify-content: center; }
+#sidebar.collapsed .sidebar-title span:first-child { display: none; }
 #log {
   flex: 1;
   overflow-y: auto;
@@ -1363,6 +1379,125 @@ html, body {
 }
 .shelf-cur   { background: rgba(76,175,80,0.15);  color: #81c784; }
 .reserve-cur { background: rgba(255,193,7,0.12);  color: #ffc107; }
+
+/* ── Mini-slot tendances (liseré) ───────────────────────────── */
+.mini-slot.trend-hot {
+  outline: 2px solid rgba(229,57,53,0.75);
+  box-shadow: 0 0 5px rgba(229,57,53,0.3);
+}
+.mini-slot.trend-cold {
+  outline: 2px solid rgba(100,181,246,0.75);
+  box-shadow: 0 0 5px rgba(100,181,246,0.25);
+}
+
+/* ── Supplier modal — corps 2 colonnes ──────────────────────── */
+.supplier-modal-body {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+  gap: 14px;
+  align-items: start;
+}
+.cart-panel {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  position: sticky;
+  top: 0;
+}
+.cart-panel-title {
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--gold);
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+.cart-panel-items { display: flex; flex-direction: column; gap: 5px; min-height: 40px; }
+.cart-panel-items .cart-item {
+  font-size: 0.78rem;
+  padding: 4px 6px;
+  background: rgba(76,175,80,0.08);
+  border-radius: 5px;
+  border-left: 2px solid var(--green);
+}
+.cart-panel-items .empty-stock { font-size: 0.75rem; padding: 4px 0; }
+.cart-panel-total {
+  font-size: 0.82rem;
+  color: var(--gold-light);
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Remises — tendance colorée ─────────────────────────────── */
+.discount-row { flex-wrap: wrap; }
+.disc-row-name { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.disc-qty-badge {
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.disc-trend-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.disc-trend-badge.hot  { background: rgba(229,57,53,0.2);  color: #ef9a9a; }
+.disc-trend-badge.cold { background: rgba(100,181,246,0.2); color: #90caf9; }
+.discount-row.disc-trend-hot  { border-left: 3px solid rgba(229,57,53,0.6); }
+.discount-row.disc-trend-cold { border-left: 3px solid rgba(100,181,246,0.6); }
+
+/* ── Top 3 widget dans allocation ───────────────────────────── */
+.top3-alloc-widget {
+  background: rgba(200,168,75,0.06);
+  border: 1px solid rgba(200,168,75,0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+.top3-alloc-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+.top3-alloc-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.top3-alloc-row:last-child { border-bottom: none; }
+.top3-alloc-rank {
+  width: 16px; height: 16px;
+  background: rgba(200,168,75,0.2);
+  color: var(--gold);
+  border-radius: 50%;
+  font-size: 0.65rem;
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.top3-alloc-name { flex: 1; display: flex; align-items: center; gap: 4px; }
+.top3-alloc-stat { font-size: 0.72rem; color: var(--text-dim); white-space: nowrap; }
+
+/* ── Bouton alloc qty badge ──────────────────────────────────── */
+.btn-alloc-qty {
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-left: 3px;
+}
 
 /* ── Responsive basique ─────────────────────────────────────── */
 @media (max-width: 900px) {
