@@ -170,13 +170,19 @@ function removeFromCart(sid, productId) {
   G.cart[sid] = G.cart[sid].filter(c => c.productId !== productId);
 }
 
+// Un rayon est "saturé" si sa réserve n'est pas vide après le réapprovisionnement auto
+// (la réserve déborde encore = le rayon était plein → commande non nécessaire et non autorisée)
+function isSaturated(sid) {
+  return G.sections[sid].reserve.length > 0;
+}
+
 // Valider les achats et passer en phase marché
 function validatePurchases() {
   const owned = ownedSections();
 
-  // Vérifier contrainte : au moins 1 ligne par rayon
+  // Vérifier contrainte : au moins 1 ligne par rayon non saturé
   for (const sid of owned) {
-    if (G.cart[sid].length === 0) {
+    if (!isSaturated(sid) && G.cart[sid].length === 0) {
       return { ok: false, error: `Vous devez commander au moins 1 produit pour "${sectionDef(sid).name}".` };
     }
   }

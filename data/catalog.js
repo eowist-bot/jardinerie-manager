@@ -43,14 +43,23 @@ const SECTIONS_DEF = {
     color: '#3a1a3a', borderColor: '#ce93d8', textColor: '#e1bee7',
     gridArea: 'dec',
   },
-  'poteries': {
-    name: 'Poteries', icon: '🏺',
+  'poteries-naturelle': {
+    name: 'Poteries Naturelles', icon: '🏺',
     unlockCost: 3500,
     upgradeCosts: [4500, 10000],
     slotsPerLevel: [10, 16, 24],
-    description: 'Pots, jardinières & contenants',
+    description: 'Terre cuite, bois & céramique',
     color: '#3a1f0a', borderColor: '#ff8a65', textColor: '#ffccbc',
-    gridArea: 'pot',
+    gridArea: 'pnat',
+  },
+  'poteries-plastique': {
+    name: 'Poteries Plastique', icon: '🪣',
+    unlockCost: 2500,
+    upgradeCosts: [3500, 8000],
+    slotsPerLevel: [10, 16, 24],
+    description: 'Pots & jardinières synthétiques',
+    color: '#0d1f2d', borderColor: '#64b5f6', textColor: '#bbdefb',
+    gridArea: 'ppla',
   },
   'animalerie': {
     name: 'Animalerie', icon: '🐟',
@@ -138,11 +147,18 @@ const CATALOG = {
   'guirlande':         { name:'Guirlandes lumineuses',section:'decoration',     price:10, icon:'✨', seasonal:['Hiver'] },
   'cadre-nature':      { name:'Cadres & tableaux',    section:'decoration',     price:22, icon:'🖼️', seasonal:null },
 
-  // ── POTERIES ─────────────────────────────────────────────
-  'pot-terracotta':    { name:'Pots en terre cuite',  section:'poteries',       price:8,  icon:'🪣', seasonal:null },
-  'jardiniere-bois':   { name:'Jardinières en bois',  section:'poteries',       price:22, icon:'🪵', seasonal:['Printemps','Été'] },
-  'suspension-macrame':{ name:'Suspensions macramé',  section:'poteries',       price:16, icon:'🪢', seasonal:null },
-  'cache-pot-design':  { name:'Cache-pots design',    section:'poteries',       price:12, icon:'🪴', seasonal:null },
+  // ── POTERIES NATURELLES ──────────────────────────────────
+  'pot-terracotta':    { name:'Pots en terre cuite',  section:'poteries-naturelle', price:8,  icon:'🏺', seasonal:null },
+  'jardiniere-bois':   { name:'Jardinières en bois',  section:'poteries-naturelle', price:22, icon:'🪵', seasonal:['Printemps','Été'] },
+  'suspension-macrame':{ name:'Suspensions macramé',  section:'poteries-naturelle', price:16, icon:'🪢', seasonal:null },
+  'pot-ceramique':     { name:'Poteries céramique',   section:'poteries-naturelle', price:18, icon:'🫙', seasonal:null },
+  'pot-pierre':        { name:'Bacs en pierre reconstituée', section:'poteries-naturelle', price:28, icon:'🪨', seasonal:['Printemps','Été'] },
+
+  // ── POTERIES PLASTIQUE ───────────────────────────────────
+  'pot-plastique':     { name:'Pots en plastique',    section:'poteries-plastique', price:3,  icon:'🪣', seasonal:null },
+  'jardiniere-plast':  { name:'Jardinières plastique',section:'poteries-plastique', price:12, icon:'🧺', seasonal:['Printemps','Été'] },
+  'cache-pot-design':  { name:'Cache-pots design',    section:'poteries-plastique', price:12, icon:'🪴', seasonal:null },
+  'bac-resine':        { name:'Bacs en résine',       section:'poteries-plastique', price:18, icon:'🫙', seasonal:['Printemps','Été'] },
 
   // ── OUTILS ───────────────────────────────────────────────
   'secateur':          { name:'Sécateurs',            section:'outils',         price:14, icon:'✂️', seasonal:null },
@@ -184,24 +200,28 @@ const CATALOG = {
 // Base 1.0 = vente normale, >1 = forte demande, <1 = faible demande
 const SEASON_DEMAND = {
   'Printemps': {
-    'serre-chaude': 0.9, 'serre-froide': 1.6, 'pepiniere': 1.8,
-    'decoration': 0.7,   'poteries': 1.4,     'animalerie': 1.0,
-    'outils': 1.5,       'produits-jardin': 1.8,'terreau': 1.6,'bassin': 1.3,
+    'serre-chaude': 0.9,  'serre-froide': 1.6,  'pepiniere': 1.8,
+    'decoration': 0.7,    'poteries-naturelle': 1.5, 'poteries-plastique': 1.4,
+    'animalerie': 1.0,    'outils': 1.5,        'produits-jardin': 1.8,
+    'terreau': 1.6,       'bassin': 1.3,
   },
   'Été': {
-    'serre-chaude': 0.7, 'serre-froide': 1.2, 'pepiniere': 1.0,
-    'decoration': 0.8,   'poteries': 1.1,     'animalerie': 1.3,
-    'outils': 1.1,       'produits-jardin': 1.5,'terreau': 1.1,'bassin': 1.8,
+    'serre-chaude': 0.7,  'serre-froide': 1.2,  'pepiniere': 1.0,
+    'decoration': 0.8,    'poteries-naturelle': 1.2, 'poteries-plastique': 1.1,
+    'animalerie': 1.3,    'outils': 1.1,        'produits-jardin': 1.5,
+    'terreau': 1.1,       'bassin': 1.8,
   },
   'Automne': {
-    'serre-chaude': 1.1, 'serre-froide': 1.3, 'pepiniere': 1.4,
-    'decoration': 1.2,   'poteries': 1.0,     'animalerie': 0.9,
-    'outils': 0.8,       'produits-jardin': 1.1,'terreau': 1.3,'bassin': 0.5,
+    'serre-chaude': 1.1,  'serre-froide': 1.3,  'pepiniere': 1.4,
+    'decoration': 1.2,    'poteries-naturelle': 1.1, 'poteries-plastique': 0.9,
+    'animalerie': 0.9,    'outils': 0.8,        'produits-jardin': 1.1,
+    'terreau': 1.3,       'bassin': 0.5,
   },
   'Hiver': {
-    'serre-chaude': 1.4, 'serre-froide': 0.5, 'pepiniere': 0.6,
-    'decoration': 1.8,   'poteries': 0.8,     'animalerie': 1.1,
-    'outils': 0.4,       'produits-jardin': 0.5,'terreau': 0.6,'bassin': 0.3,
+    'serre-chaude': 1.4,  'serre-froide': 0.5,  'pepiniere': 0.6,
+    'decoration': 1.8,    'poteries-naturelle': 0.9, 'poteries-plastique': 0.7,
+    'animalerie': 1.1,    'outils': 0.4,        'produits-jardin': 0.5,
+    'terreau': 0.6,       'bassin': 0.3,
   },
 };
 
@@ -211,7 +231,8 @@ const SUPPLIER_NAMES = {
   'serre-froide':    ['Fleurs du Nord',  'Saison Verte',    'Plantissimo'],
   'pepiniere':       ['Arborea',         'La Pépine',       'ForestGarden'],
   'decoration':      ['DécoNature',      'Tendance Maison', 'Artisan Vert'],
-  'poteries':        ['Terra Firma',     'L\'Atelier Cuit', 'Céramiques du Sud'],
+  'poteries-naturelle': ['Terra Firma',   'L\'Atelier Cuit', 'Céramiques du Sud'],
+  'poteries-plastique': ['PlastiJardin', 'GreenPlast',       'ColorPot'],
   'animalerie':      ['Zoo&Co',          'Aqua Vivant',     'Bestiole & Cie'],
   'outils':          ['FerronJardin',    'OutilPro',        'Le Jardinier Malin'],
   'produits-jardin': ['BioGarden',       'Traitements+',    'Semencier Fleuri'],

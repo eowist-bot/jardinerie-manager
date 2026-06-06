@@ -73,7 +73,7 @@ function renderStoreMap() {
         </div>
         <div class="tile-stats">
           <span>📦 ${stockQty}/${capacity}</span>
-          ${reserveQty > 0 ? `<span class="reserve-badge">🏠 ${reserveQty}</span>` : ''}
+          ${reserveQty > 0 ? `<span class="reserve-badge ${isSaturated(sid) ? 'saturated' : ''}">🏠 ${reserveQty}${isSaturated(sid) ? ' 🔒' : ''}</span>` : ''}
           ${nearEnd ? '<span class="warn-badge">⚠️ Fin saison</span>' : ''}
         </div>
         <div class="shelf-mini">${renderMiniShelf(sid)}</div>
@@ -216,6 +216,30 @@ function doUnlock(sid) {
 function openSupplierModal(sid) {
   activeSection = sid;
   modalMode = 'supplier';
+  // Si rayon saturé (réserve non vide), on affiche l'info et on bloque
+  if (isSaturated(sid)) {
+    const def = sectionDef(sid);
+    const sec = G.sections[sid];
+    const reserveQty = sec.reserve.reduce((a, r) => a + r.qty, 0);
+    showModal(`
+      <h2>${def.icon} ${def.name} — Rayon saturé</h2>
+      <div class="saturated-msg">
+        <span class="sat-icon">🏠</span>
+        <div>
+          <strong>Réserve pleine : ${reserveQty} article(s) en attente.</strong>
+          <p>Le stock en réserve n'est pas encore écoulé. Aucune nouvelle commande n'est possible pour ce rayon tant que la réserve n'est pas vide.</p>
+        </div>
+      </div>
+      ${sec.reserve.map(r => {
+        const prod = productDef(r.productId);
+        return `<div class="reserve-row">${prod.icon} <strong>${prod.name}</strong> ×${r.qty}</div>`;
+      }).join('')}
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal()">Fermer</button>
+      </div>
+    `);
+    return;
+  }
   renderSupplierModal(sid);
 }
 
@@ -477,15 +501,28 @@ function openSupplierPanel() {
     const def = sectionDef(sid);
     const cart = G.cart[sid] || [];
     const total = cart.reduce((a, c) => a + c.qty * c.unitPrice, 0);
+    const sat = isSaturated(sid);
+    let statusText, rowClass;
+    if (sat) {
+      rowClass = 'saturated';
+      statusText = '<em>🏠 Réserve pleine — commande bloquée</em>';
+    } else if (cart.length > 0) {
+      rowClass = 'has-items';
+      statusText = `${cart.length} ligne(s) — ${fmt(total)}`;
+    } else {
+      rowClass = 'empty';
+      statusText = '<em>⚠️ Aucune commande !</em>';
+    }
     return `
-      <div class="supplier-summary-row ${cart.length > 0 ? 'has-items' : 'empty'}">
+      <div class="supplier-summary-row ${rowClass}">
         <span>${def.icon} ${def.name}</span>
-        <span>${cart.length > 0 ? `${cart.length} ligne(s) — ${fmt(total)}` : '<em>⚠️ Aucune commande !</em>'}</span>
-        <button class="btn-small" onclick="closeModal(); openSupplierModal('${sid}')">Modifier</button>
+        <span>${statusText}</span>
+        <button class="btn-small" onclick="closeModal(); openSupplierModal('${sid}')">${sat ? 'Voir' : 'Modifier'}</button>
       </div>`;
   }).join('');
 
-  const allOrdered = owned.every(sid => (G.cart[sid] || []).length > 0);
+  // Tous les rayons non saturés doivent avoir une commande
+  const allOrdered = owned.every(sid => isSaturated(sid) || (G.cart[sid] || []).length > 0);
   const grandTotal = owned.reduce((a, sid) => a + (G.cart[sid] || []).reduce((b, c) => b + c.qty * c.unitPrice, 0), 0);
 
   showModal(`

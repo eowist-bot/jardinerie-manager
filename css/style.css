@@ -127,10 +127,10 @@ html, body {
 #store-map {
   display: grid;
   grid-template-areas:
-    "sc  sc  sf  sf  pep pep"
-    "sc  sc  sf  sf  pep pep"
-    "dec dec pot pot ani ani"
-    "out out pjd pjd ter bas";
+    "sc   sc   sf   sf   pep  pep"
+    "sc   sc   sf   sf   pep  pep"
+    "dec  dec  pnat ppla ani  ani"
+    "out  out  pjd  pjd  ter  bas";
   grid-template-columns: repeat(6, 1fr);
   grid-template-rows: auto auto auto auto;
   gap: 8px;
@@ -224,6 +224,23 @@ html, body {
   border-radius: 4px;
   padding: 1px 5px;
 }
+.reserve-badge.saturated {
+  background: rgba(100,181,246,0.2);
+  color: #64b5f6;
+}
+.saturated-msg {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: rgba(100,181,246,0.08);
+  border: 1px solid rgba(100,181,246,0.25);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 14px;
+  color: #b3e5fc;
+}
+.sat-icon { font-size: 2rem; }
+.saturated-msg p { margin-top: 4px; font-size: 0.85rem; color: var(--text-dim); }
 .warn-badge {
   background: rgba(255,152,0,0.2);
   color: #ffa726;
@@ -453,8 +470,9 @@ html, body {
   font-size: 0.85rem;
   margin-bottom: 4px;
 }
-.supplier-summary-row.has-items { background: rgba(76,175,80,0.1); }
-.supplier-summary-row.empty     { background: rgba(255,152,0,0.1); color: #ffa726; }
+.supplier-summary-row.has-items  { background: rgba(76,175,80,0.1); }
+.supplier-summary-row.empty      { background: rgba(255,152,0,0.1); color: #ffa726; }
+.supplier-summary-row.saturated  { background: rgba(100,181,246,0.08); color: #90caf9; font-style: italic; }
 .supplier-summary-row span:first-child { flex: 1; font-weight: 700; }
 .grand-total { margin: 10px 0; font-size: 0.9rem; color: var(--text-dim); }
 
@@ -633,10 +651,10 @@ html, body {
 @media (max-width: 900px) {
   #store-map {
     grid-template-areas:
-      "sc  sc  sf  sf"
-      "pep pep dec dec"
-      "pot pot ani ani"
-      "out pjd ter bas";
+      "sc   sc   sf   sf"
+      "pep  pep  dec  dec"
+      "pnat ppla ani  ani"
+      "out  pjd  ter  bas";
     grid-template-columns: repeat(4, 1fr);
   }
   #main-body { grid-template-columns: 1fr; }
