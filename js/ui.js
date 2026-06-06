@@ -257,7 +257,7 @@ function renderSupplierModal(sid) {
         const prod      = productDef(productId);
         const inCart    = cart.find(c => c.productId === productId);
         const sellAmt   = catalogSellPrice(productId);
-        const margin    = Math.round((sellAmt / unitPrice - 1) * 100);
+
         const alreadyOn = typeOnShelf(sid, productId);
         const shelfItem = sec.stock.find(s => s.productId === productId);
         const resItem   = sec.reserve.find(r => r.productId === productId);
@@ -297,8 +297,7 @@ function renderSupplierModal(sid) {
             <div class="offer-nums">
               <span class="offer-qty">×${qty}</span>
               ${priceHtml}
-              <span class="offer-sell">Vente : <strong>${fmt(sellAmt)}</strong>/u
-                <em class="profit-tag">+${margin}% marge</em></span>
+              <span class="offer-sell">Vente : <strong>${fmt(sellAmt)}</strong>/u</span>
               <span class="offer-total">Coût total : ${fmt(qty * unitPrice)}</span>
             </div>
             <button class="btn-add-cart ${inCart ? 'added' : ''}" onclick="toggleCartItem('${sid}', ${idx})">
