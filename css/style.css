@@ -253,32 +253,42 @@ html, body {
   50%       { opacity: 0.5; }
 }
 
-/* Mini-étagère visuelle */
+/* Mini-étagère visuelle — 1 case par type de produit, max 12 */
 .shelf-mini {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
   gap: 2px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .mini-slot {
-  width: 22px; height: 22px;
+  width: 34px; height: 34px;
   background: rgba(255,255,255,0.06);
-  border-radius: 3px;
-  font-size: 13px;
-  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  font-size: 14px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
   position: relative;
   cursor: default;
   transition: background 0.2s;
+  gap: 0;
+  line-height: 1;
 }
-.mini-slot.empty { background: rgba(0,0,0,0.2); }
+.mini-slot.empty { background: rgba(0,0,0,0.15); }
 .mini-slot.warn  { background: rgba(255,152,0,0.2); outline: 1px solid #ffa726; }
+.mini-qty {
+  font-size: 8px;
+  color: rgba(255,255,255,0.55);
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 1px;
+}
 .mini-disc {
   position: absolute;
-  bottom: -1px; right: -1px;
+  top: 0; right: 0;
   font-size: 6px;
   background: #e53935;
   color: #fff;
-  border-radius: 2px;
+  border-radius: 0 3px 0 3px;
   padding: 0 2px;
   line-height: 9px;
 }

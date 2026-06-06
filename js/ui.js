@@ -99,33 +99,29 @@ function renderStoreMap() {
 
 function renderMiniShelf(sid) {
   const sec = G.sections[sid];
-  const capacity = sectionCapacity(sid);
+  const MAX_SLOTS = 12; // toujours 12 cases, 1 par type de produit
   let html = '';
-  let total = 0;
-  const items = [];
+  let shown = 0;
 
   sec.stock.forEach(item => {
+    if (shown >= MAX_SLOTS) return;
     const prod = productDef(item.productId);
-    const isSeasonal = prod.seasonal && prod.seasonal.includes(season());
     const isEndSeason = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
-    items.push({ item, prod, isSeasonal, isEndSeason });
-    total += item.qty;
+    const warnClass = isEndSeason && item.discount === 0 ? ' warn' : '';
+    const discBadge = item.discount > 0
+      ? `<span class="mini-disc">-${Math.round(item.discount * 100)}%</span>`
+      : '';
+    const tooltip = `${prod.name} ×${item.qty}${item.discount > 0 ? ' · -' + Math.round(item.discount * 100) + '%' : ''}`;
+    html += `
+      <div class="mini-slot${warnClass}" title="${tooltip}">
+        ${prod.icon}${discBadge}
+        <span class="mini-qty">×${item.qty}</span>
+      </div>`;
+    shown++;
   });
 
-  // Afficher jusqu'à 12 slots visuels
-  const maxShow = Math.min(12, capacity);
-  let shown = 0;
-  items.forEach(({ item, prod, isEndSeason }) => {
-    const slots = Math.ceil(item.qty / Math.ceil(capacity / maxShow));
-    for (let i = 0; i < Math.min(slots, maxShow - shown); i++) {
-      const discBadge = item.discount > 0 ? `<span class="mini-disc">-${Math.round(item.discount*100)}%</span>` : '';
-      const warnClass = isEndSeason && item.discount === 0 ? ' warn' : '';
-      html += `<div class="mini-slot${warnClass}" title="${prod.name} (×${item.qty})${item.discount > 0 ? ' -'+Math.round(item.discount*100)+'%' : ''}">${prod.icon}${discBadge}</div>`;
-      shown++;
-    }
-  });
-  // Slots vides
-  for (let i = shown; i < maxShow; i++) {
+  // Cases vides jusqu'à 12
+  for (let i = shown; i < MAX_SLOTS; i++) {
     html += `<div class="mini-slot empty"></div>`;
   }
   return html;
