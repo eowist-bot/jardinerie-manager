@@ -33,15 +33,11 @@ function renderHUD() {
   const phases = { supplier:'🏪 Approvisionnement', market:'🌿 Gestion du magasin', results:'📊 Résultats' };
   el('hud-phase').textContent = phases[G.phase] || '';
 
-  // Bouton fin de semaine
+  // Boutons selon la phase
   const endBtn = el('btn-end-week');
-  if (endBtn) {
-    endBtn.style.display = G.phase === 'market' ? 'inline-flex' : 'none';
-  }
+  if (endBtn) endBtn.style.display = G.phase === 'market' ? 'inline-flex' : 'none';
   const supplierBtn = el('btn-supplier');
-  if (supplierBtn) {
-    supplierBtn.style.display = G.phase === 'supplier' ? 'inline-flex' : 'none';
-  }
+  if (supplierBtn) supplierBtn.style.display = G.phase === 'supplier' ? 'inline-flex' : 'none';
 }
 
 // ── Carte du magasin (top-down) ──────────────────────────────

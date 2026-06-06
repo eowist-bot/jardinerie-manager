@@ -130,7 +130,7 @@ html, body {
     "sc  sc  sf  sf  pep pep"
     "sc  sc  sf  sf  pep pep"
     "dec dec pot pot ani ani"
-    "out pjd ter bas res res";
+    "out out pjd pjd ter bas";
   grid-template-columns: repeat(6, 1fr);
   grid-template-rows: auto auto auto auto;
   gap: 8px;
@@ -636,8 +636,7 @@ html, body {
       "sc  sc  sf  sf"
       "pep pep dec dec"
       "pot pot ani ani"
-      "out pjd ter bas"
-      "res res res res";
+      "out pjd ter bas";
     grid-template-columns: repeat(4, 1fr);
   }
   #main-body { grid-template-columns: 1fr; }
