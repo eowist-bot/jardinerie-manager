@@ -214,7 +214,9 @@ function generateWeeklyForecast() {
     const seasonMult = SEASON_DEMAND[season()][sid] || 1.0;
     const items = G.sections[sid].stock.length > 0
       ? G.sections[sid].stock
-      : G.sections[sid].reserve.map(r => ({ productId: r.productId }));
+      : G.sections[sid].reserve.length > 0
+        ? G.sections[sid].reserve.map(r => ({ productId: r.productId }))
+        : (G.supplierOffers[sid] || []).map(o => ({ productId: o.productId }));
 
     items.forEach(item => {
       const prod     = productDef(item.productId);

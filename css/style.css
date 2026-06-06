@@ -114,9 +114,11 @@ html, body {
 
 /* ── Carte du magasin ───────────────────────────────────────── */
 #store-area {
-  overflow-y: auto;
-  padding: 16px;
+  overflow: hidden;
+  padding: 12px;
   background: var(--bg2);
+  display: flex;
+  flex-direction: column;
 }
 
 #store-map {
@@ -127,9 +129,9 @@ html, body {
     "dec  dec  pnat ppla ani  ani"
     "out  out  pjd  pjd  ter  bas";
   grid-template-columns: repeat(6, 1fr);
-  grid-template-rows: auto auto auto auto;
-  gap: 8px;
-  min-height: 0;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 10px;
+  height: 100%;
 }
 
 /* Section réserve spéciale */
@@ -142,13 +144,13 @@ html, body {
   background: var(--sec-color, #1a2e1a);
   border: 2px solid var(--sec-border, #2e4a2e);
   border-radius: var(--radius);
-  padding: 10px;
+  padding: 12px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 130px;
+  gap: 8px;
+  min-height: 170px;
   position: relative;
   overflow: hidden;
 }
@@ -182,15 +184,15 @@ html, body {
   align-items: center;
   gap: 6px;
 }
-.tile-icon { font-size: 1.2rem; }
+.tile-icon { font-size: 1.5rem; }
 .tile-name {
   font-weight: 800;
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   color: var(--sec-text, #a8e6a0);
   flex: 1;
   line-height: 1.2;
 }
-.tile-slots { font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; }
+.tile-slots { font-size: 0.75rem; color: var(--text-dim); white-space: nowrap; }
 
 /* Barre de remplissage rayon */
 .shelf-bar-wrap {
@@ -252,12 +254,13 @@ html, body {
 .shelf-mini {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 2px;
-  margin-top: 4px;
+  gap: 3px;
+  margin-top: 6px;
+  flex: 1;
 }
-/* Pour les rayons à plus de 6 slots, la grille s'adapte naturellement (wraps) */
 .mini-slot {
-  width: 34px; height: 34px;
+  width: 100%; aspect-ratio: 1;
+  min-width: 36px; min-height: 36px;
   background: rgba(255,255,255,0.06);
   border-radius: 4px;
   font-size: 14px;
@@ -328,6 +331,9 @@ html, body {
   grid-template-columns: 1fr 280px;
   overflow: hidden;
   transition: grid-template-columns 0.25s ease;
+}
+#main-body.log-hidden {
+  grid-template-columns: 1fr 36px;
 }
 #sidebar {
   background: #111d11;

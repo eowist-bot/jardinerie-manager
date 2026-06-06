@@ -421,9 +421,9 @@ function renderAllocationModal(sid) {
       <div class="alloc-done-banner">✅ Tout est en rayon !</div>
       ${renderShelfPreview(sid)}
       ${renderShelfDiscounts(sid)}
-      ${renderSlotBuySection(sid)}
       <div class="modal-actions">
         <button class="btn-primary" onclick="closeModal()">← Retour</button>
+        ${renderSlotBuyInline(sid)}
       </div>
     `);
     return;
@@ -1001,9 +1001,11 @@ function showToast(msg, type = 'info') {
 }
 
 function toggleLog() {
-  const sidebar = el('sidebar');
-  const icon    = el('log-toggle-icon');
+  const sidebar  = el('sidebar');
+  const mainBody = el('main-body');
+  const icon     = el('log-toggle-icon');
   sidebar.classList.toggle('collapsed');
+  mainBody.classList.toggle('log-hidden');
   icon.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀';
 }
 
