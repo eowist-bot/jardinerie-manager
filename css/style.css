@@ -195,7 +195,7 @@ html, body {
   flex: 1;
   line-height: 1.2;
 }
-.tile-level { font-size: 0.65rem; color: var(--gold); letter-spacing: 1px; }
+.tile-slots { font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; }
 
 /* Barre de remplissage rayon */
 .shelf-bar-wrap {
@@ -253,13 +253,14 @@ html, body {
   50%       { opacity: 0.5; }
 }
 
-/* Mini-étagère visuelle — 1 case par type de produit, max 12 */
+/* Mini-étagère — 1 case par type, autant de cases que de slots */
 .shelf-mini {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 2px;
   margin-top: 4px;
 }
+/* Pour les rayons à plus de 6 slots, la grille s'adapte naturellement (wraps) */
 .mini-slot {
   width: 34px; height: 34px;
   background: rgba(255,255,255,0.06);
@@ -534,6 +535,85 @@ html, body {
   background: rgba(255,255,255,0.03);
   border-radius: 5px;
   margin-bottom: 3px;
+}
+
+/* ── Indicateur de slots ─────────────────────────────────── */
+.slots-overview {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.slots-viz {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.slot-dot {
+  width: 18px; height: 18px;
+  border-radius: 3px;
+}
+.slot-dot.used   { background: var(--green); }
+.slot-dot.free   { background: rgba(255,255,255,0.12); border: 1px dashed rgba(255,255,255,0.25); }
+.slot-dot.locked { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); }
+.slots-legend {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.slots-legend .slot-dot { width: 10px; height: 10px; display: inline-block; margin-right: 2px; }
+
+/* ── Tags slot dans les offres ───────────────────────────── */
+.slot-tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+  font-weight: 700;
+}
+.slot-tag.existing { background: rgba(76,175,80,0.15);  color: #81c784; }
+.slot-tag.new-slot { background: rgba(66,165,245,0.15); color: #90caf9; }
+.slot-tag.no-slot  { background: rgba(255,167,38,0.15); color: #ffcc02; }
+
+/* ── Section réserve dans la modal stock ─────────────────── */
+.reserve-section {
+  margin-top: 16px;
+  border: 1px solid rgba(255,193,7,0.3);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.reserve-section.empty-reserve {
+  border-color: rgba(255,255,255,0.08);
+}
+.reserve-header {
+  background: rgba(255,193,7,0.08);
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #ffc107;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.reserve-note {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.reserve-row-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 14px;
+  border-top: 1px solid rgba(255,255,255,0.04);
 }
 
 /* Résultats */

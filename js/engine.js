@@ -10,45 +10,56 @@ const SEASON_END_WARN = 10;    // Semaine à partir de laquelle on alerte (>=10/
 // ── État global ─────────────────────────────────────────────
 const G = {
   week:         1,
-  seasonIdx:    0,          // 0=Printemps … 3=Hiver
-  weekInSeason: 1,          // 1-13
+  seasonIdx:    0,
+  weekInSeason: 1,
   money:        5000,
   phase:        'supplier', // 'supplier' | 'market' | 'results'
 
-  // sectionId → { owned, level (1-3), stock:[], reserve:[] }
-  // stock item : { id, productId, qty, buyPrice, discount }
+  // sectionId → { owned, slots (6-12), stock:[], reserve:[] }
+  // stock item  : { id, productId, qty, buyPrice, discount }
   // reserve item: { productId, qty, buyPrice }
   sections: {},
 
-  supplierOffers: {},  // sectionId → [{supplierName, productId, qty, unitPrice}]
-  cart:           {},  // sectionId → [{productId, qty, unitPrice}]
-
-  weeklyResults:  null,  // résultats de la semaine terminée
+  supplierOffers: {},
+  cart:           {},
+  weeklyResults:  null,
   log:            [],
   nextItemId:     1,
 };
 
 // ── Helpers ──────────────────────────────────────────────────
-function season()      { return SEASONS[G.seasonIdx]; }
-function seasonWeek()  { return G.weekInSeason; }
+function season()          { return SEASONS[G.seasonIdx]; }
 function nearEndOfSeason() { return G.weekInSeason >= SEASON_END_WARN; }
-
 function sectionDef(sid)   { return SECTIONS_DEF[sid]; }
 function productDef(pid)   { return CATALOG[pid]; }
 
-function sectionCapacity(sid) {
-  const s = G.sections[sid];
-  const d = sectionDef(sid);
-  return d.slotsPerLevel[s.level - 1];
+// Capacité = nombre de slots (1 slot = 1 type de produit)
+function sectionCapacity(sid) { return G.sections[sid].slots; }
+
+// Nombre de slots occupés = types distincts avec qty > 0
+function occupiedSlots(sid) {
+  const ids = new Set(G.sections[sid].stock.filter(s => s.qty > 0).map(s => s.productId));
+  return ids.size;
 }
 
-function sectionStockCount(sid) {
-  return G.sections[sid].stock.reduce((a, i) => a + i.qty, 0);
+// Slots libres (pour de nouveaux types)
+function freeSlots(sid) {
+  return sectionCapacity(sid) - occupiedSlots(sid);
+}
+
+// Un type est-il déjà sur les rayons ?
+function typeOnShelf(sid, productId) {
+  return G.sections[sid].stock.some(s => s.productId === productId && s.qty > 0);
+}
+
+// Rayon saturé = la réserve n'est pas vide après le réapprovisionnement auto
+// Cela signifie qu'il n'y avait plus de slot libre pour les nouveaux types en réserve
+function isSaturated(sid) {
+  return G.sections[sid].reserve.length > 0;
 }
 
 function sellPrice(buyPrice, discount = 0) {
-  const base = buyPrice * SELL_PRICE_MULT;
-  return base * (1 - discount);
+  return buyPrice * SELL_PRICE_MULT * (1 - discount);
 }
 
 function addLog(msg, type = 'info') {
@@ -56,13 +67,21 @@ function addLog(msg, type = 'info') {
   if (G.log.length > 80) G.log.pop();
 }
 
+// Coût du prochain slot supplémentaire
+function nextSlotCost(sid) {
+  const sec = G.sections[sid];
+  const def = sectionDef(sid);
+  const extraAlreadyBought = sec.slots - BASE_SLOTS; // 0 si on est au niveau de base
+  return def.slotCost * (extraAlreadyBought + 1);
+}
+
 // ── Initialisation ──────────────────────────────────────────
 function initGame() {
   G.sections = {};
   Object.keys(SECTIONS_DEF).forEach(sid => {
     G.sections[sid] = {
-      owned: SECTIONS_DEF[sid].unlockCost === 0,
-      level: 1,
+      owned:   SECTIONS_DEF[sid].unlockCost === 0,
+      slots:   BASE_SLOTS,
       stock:   [],
       reserve: [],
     };
@@ -89,34 +108,41 @@ function startSupplierPhase() {
 }
 
 function autoRestockFromReserve() {
-  const owned = ownedSections();
-  owned.forEach(sid => {
+  ownedSections().forEach(sid => {
     const sec = G.sections[sid];
-    const cap = sectionCapacity(sid);
-    let onShelf = sectionStockCount(sid);
-    const toMove = [];
-    for (let i = sec.reserve.length - 1; i >= 0 && onShelf < cap; i--) {
-      const r = sec.reserve[i];
-      const canMove = Math.min(r.qty, cap - onShelf);
-      if (canMove > 0) {
-        onShelf += canMove;
-        toMove.push({ idx: i, qty: canMove, productId: r.productId, buyPrice: r.buyPrice });
+
+    // Passe 1 : types déjà sur le rayon → on ajoute les quantités sans utiliser de slot
+    sec.reserve.forEach(r => {
+      if (r.qty <= 0) return;
+      if (typeOnShelf(sid, r.productId)) {
+        addToStock(sid, r.productId, r.qty, r.buyPrice);
+        addLog(`📦 ${sectionDef(sid).name} — réserve → rayon : ${r.qty}× ${productDef(r.productId).name}`, 'restock');
+        r.qty = 0;
       }
-    }
-    toMove.forEach(({ idx, qty, productId, buyPrice }) => {
-      sec.reserve[idx].qty -= qty;
-      if (sec.reserve[idx].qty <= 0) sec.reserve.splice(idx, 1);
-      addToStock(sid, productId, qty, buyPrice);
-      addLog(`📦 ${sectionDef(sid).name} — réserve → rayon : ${qty}× ${productDef(productId).name}`, 'restock');
     });
+    sec.reserve = sec.reserve.filter(r => r.qty > 0);
+
+    // Passe 2 : nouveaux types → un slot libre par type
+    sec.reserve.forEach(r => {
+      if (r.qty <= 0 || freeSlots(sid) <= 0) return;
+      addToStock(sid, r.productId, r.qty, r.buyPrice);
+      addLog(`📦 ${sectionDef(sid).name} — réserve → rayon (nouveau slot) : ${r.qty}× ${productDef(r.productId).name}`, 'restock');
+      r.qty = 0;
+    });
+    sec.reserve = sec.reserve.filter(r => r.qty > 0);
   });
 }
 
+// Ajoute au stock rayon. Même productId = même slot (on accumule la quantité).
 function addToStock(sid, productId, qty, buyPrice, discount = 0) {
   const sec = G.sections[sid];
-  const existing = sec.stock.find(s => s.productId === productId && s.buyPrice === buyPrice && s.discount === discount);
+  // On regroupe TOUS les lots du même produit dans une seule entrée (un seul slot visuel)
+  const existing = sec.stock.find(s => s.productId === productId);
   if (existing) {
-    existing.qty += qty;
+    // Prix moyen pondéré pour garder la cohérence comptable
+    const totalQty   = existing.qty + qty;
+    existing.buyPrice = (existing.buyPrice * existing.qty + buyPrice * qty) / totalQty;
+    existing.qty      = totalQty;
   } else {
     sec.stock.push({ id: G.nextItemId++, productId, qty, buyPrice, discount });
   }
@@ -124,28 +150,22 @@ function addToStock(sid, productId, qty, buyPrice, discount = 0) {
 
 function generateSupplierOffers() {
   G.supplierOffers = {};
-  const owned = ownedSections();
-  owned.forEach(sid => {
-    const products = Object.entries(CATALOG)
-      .filter(([, p]) => p.section === sid)
-      .map(([pid]) => pid);
-    const names = SUPPLIER_NAMES[sid];
-    const numSuppliers = 2 + Math.floor(Math.random() * 2); // 2 ou 3
-    const offers = [];
+  ownedSections().forEach(sid => {
+    const products    = Object.entries(CATALOG).filter(([, p]) => p.section === sid).map(([pid]) => pid);
+    const names       = SUPPLIER_NAMES[sid];
+    const numSuppliers = 2 + Math.floor(Math.random() * 2);
+    const offers      = [];
     const usedProducts = new Set();
 
     for (let s = 0; s < numSuppliers; s++) {
       const supplierName = names[s % names.length];
-      // Chaque fournisseur propose 2-4 produits différents
-      const numProducts = 2 + Math.floor(Math.random() * 3);
-      const available = products.filter(p => !usedProducts.has(p));
-      const chosen = shuffle([...available]).slice(0, Math.min(numProducts, available.length));
-      chosen.forEach(pid => {
+      const numProducts  = 2 + Math.floor(Math.random() * 3);
+      const available    = products.filter(p => !usedProducts.has(p));
+      shuffle([...available]).slice(0, Math.min(numProducts, available.length)).forEach(pid => {
         usedProducts.add(pid);
-        const base = productDef(pid).price;
-        // Prix fournisseur : ±15% du prix catalogue
+        const base      = productDef(pid).price;
         const unitPrice = Math.round(base * (0.85 + Math.random() * 0.3) * 100) / 100;
-        const qty = 3 + Math.floor(Math.random() * 8); // 3 à 10 unités
+        const qty       = 3 + Math.floor(Math.random() * 8);
         offers.push({ supplierName, productId: pid, qty, unitPrice });
       });
     }
@@ -157,8 +177,7 @@ function generateSupplierOffers() {
 function addToCart(sid, offerIndex) {
   const offer = G.supplierOffers[sid][offerIndex];
   if (!offer) return;
-  // Regrouper par productId dans le cart
-  const existing = G.cart[sid].find(c => c.productId === offer.productId && c.unitPrice === offer.unitPrice);
+  const existing = G.cart[sid].find(c => c.productId === offer.productId);
   if (existing) {
     existing.qty += offer.qty;
   } else {
@@ -170,29 +189,20 @@ function removeFromCart(sid, productId) {
   G.cart[sid] = G.cart[sid].filter(c => c.productId !== productId);
 }
 
-// Un rayon est "saturé" si sa réserve n'est pas vide après le réapprovisionnement auto
-// (la réserve déborde encore = le rayon était plein → commande non nécessaire et non autorisée)
-function isSaturated(sid) {
-  return G.sections[sid].reserve.length > 0;
-}
-
-// Valider les achats et passer en phase marché
+// Valider les achats → phase marché
 function validatePurchases() {
   const owned = ownedSections();
 
-  // Vérifier contrainte : au moins 1 ligne par rayon non saturé
+  // Contrainte : ≥1 ligne par rayon non saturé
   for (const sid of owned) {
     if (!isSaturated(sid) && G.cart[sid].length === 0) {
       return { ok: false, error: `Vous devez commander au moins 1 produit pour "${sectionDef(sid).name}".` };
     }
   }
 
-  // Calculer coût total
+  // Vérif budget
   let total = 0;
-  owned.forEach(sid => {
-    G.cart[sid].forEach(item => { total += item.qty * item.unitPrice; });
-  });
-
+  owned.forEach(sid => G.cart[sid].forEach(item => { total += item.qty * item.unitPrice; }));
   if (total > G.money) {
     return { ok: false, error: `Budget insuffisant ! Commande : ${fmt(total)} — Caisse : ${fmt(G.money)}` };
   }
@@ -200,22 +210,25 @@ function validatePurchases() {
   // Appliquer les achats
   G.money -= total;
   owned.forEach(sid => {
+    const sec = G.sections[sid];
     G.cart[sid].forEach(item => {
-      const cap = sectionCapacity(sid);
-      const onShelf = sectionStockCount(sid);
-      const freeSlots = cap - onShelf;
-      const toShelf = Math.min(item.qty, freeSlots);
-      const toReserve = item.qty - toShelf;
+      const alreadyOnShelf = typeOnShelf(sid, item.productId);
 
-      if (toShelf > 0) addToStock(sid, item.productId, toShelf, item.unitPrice);
-      if (toReserve > 0) {
-        const sec = G.sections[sid];
-        const existing = sec.reserve.find(r => r.productId === item.productId && r.buyPrice === item.unitPrice);
-        if (existing) existing.qty += toReserve;
-        else sec.reserve.push({ productId: item.productId, qty: toReserve, buyPrice: item.unitPrice });
-        addLog(`📥 ${toReserve}× ${productDef(item.productId).name} → réserve (rayon plein)`, 'restock');
+      if (alreadyOnShelf) {
+        // Type déjà en rayon : on ajoute sans consommer de slot
+        addToStock(sid, item.productId, item.qty, item.unitPrice);
+        addLog(`🛒 ${item.qty}× ${productDef(item.productId).name} (réassort) — ${fmt(item.qty * item.unitPrice)}`, 'buy');
+      } else if (freeSlots(sid) > 0) {
+        // Nouveau type, slot disponible
+        addToStock(sid, item.productId, item.qty, item.unitPrice);
+        addLog(`🛒 ${item.qty}× ${productDef(item.productId).name} (nouveau slot) — ${fmt(item.qty * item.unitPrice)}`, 'buy');
+      } else {
+        // Plus de slot libre → réserve
+        const existing = sec.reserve.find(r => r.productId === item.productId);
+        if (existing) existing.qty += item.qty;
+        else sec.reserve.push({ productId: item.productId, qty: item.qty, buyPrice: item.unitPrice });
+        addLog(`📥 ${item.qty}× ${productDef(item.productId).name} → réserve (plus de slot libre) — ${fmt(item.qty * item.unitPrice)}`, 'restock');
       }
-      addLog(`🛒 Acheté ${item.qty}× ${productDef(item.productId).name} chez ${item.supplierName} — ${fmt(item.qty * item.unitPrice)}`, 'buy');
     });
   });
 
@@ -236,10 +249,9 @@ function setDiscount(sid, stockItemId, discountRate) {
 // ── Phase fin de semaine / ventes ───────────────────────────
 function endWeek() {
   const results = [];
-  const owned = ownedSections();
 
-  owned.forEach(sid => {
-    const sec = G.sections[sid];
+  ownedSections().forEach(sid => {
+    const sec        = G.sections[sid];
     const seasonMult = SEASON_DEMAND[season()][sid] || 1.0;
     const sectionResults = [];
 
@@ -247,60 +259,41 @@ function endWeek() {
       const prod = productDef(item.productId);
       if (item.qty <= 0) return;
 
-      // Taux de vente de base
-      let rate = BASE_SELL_RATE + (Math.random() * 0.3 - 0.1); // ±10% aléatoire
-
-      // Modificateur saison pour la section
+      let rate = BASE_SELL_RATE + (Math.random() * 0.3 - 0.1);
       rate *= seasonMult;
 
-      // Si produit saisonnier : bonus en saison, malus hors saison
       if (prod.seasonal) {
-        if (prod.seasonal.includes(season())) {
-          rate *= 1.4;
-        } else {
-          rate *= 0.3; // Très faible hors saison
-        }
+        rate *= prod.seasonal.includes(season()) ? 1.4 : 0.3;
       }
-
-      // Bonus remise : chaque % de remise = +2% de taux de vente
       if (item.discount > 0) {
         rate *= 1 + item.discount * 2;
       }
-
-      // Minimum garanti : au moins MIN_SELL_RATE
       rate = Math.max(MIN_SELL_RATE, Math.min(1, rate));
 
-      const sold = Math.max(1, Math.round(item.qty * rate));
-      const actualSold = Math.min(sold, item.qty);
-      const revenue = actualSold * sellPrice(item.buyPrice, item.discount);
+      const actualSold = Math.min(Math.max(1, Math.round(item.qty * rate)), item.qty);
+      const revenue    = actualSold * sellPrice(item.buyPrice, item.discount);
 
       sectionResults.push({
-        productId:    item.productId,
-        sold:         actualSold,
-        revenue:      revenue,
-        unitRevenue:  sellPrice(item.buyPrice, item.discount),
-        discount:     item.discount,
-        wasDiscounted:item.discount > 0,
+        productId: item.productId, sold: actualSold, revenue,
+        unitRevenue: sellPrice(item.buyPrice, item.discount),
+        discount: item.discount, wasDiscounted: item.discount > 0,
       });
 
       item.qty -= actualSold;
-      G.money += revenue;
+      G.money  += revenue;
     });
 
-    // Nettoyer stock épuisé
+    // Libérer les slots épuisés
     sec.stock = sec.stock.filter(i => i.qty > 0);
 
     results.push({ sectionId: sid, items: sectionResults });
     const secRevenue = sectionResults.reduce((a, r) => a + r.revenue, 0);
-    addLog(`📊 ${sectionDef(sid).name} — ${fmt(secRevenue)} de CA cette semaine`, 'sales');
+    addLog(`📊 ${sectionDef(sid).name} — ${fmt(secRevenue)} de CA`, 'sales');
   });
 
   G.weeklyResults = results;
-
-  // Avancer la semaine
   advanceWeek();
   G.phase = 'results';
-
   return results;
 }
 
@@ -309,42 +302,24 @@ function advanceWeek() {
   G.weekInSeason++;
   if (G.weekInSeason > WEEKS_PER_SEASON) {
     G.weekInSeason = 1;
-    G.seasonIdx = (G.seasonIdx + 1) % 4;
+    G.seasonIdx    = (G.seasonIdx + 1) % 4;
     addLog(`🌍 Nouvelle saison : ${season()} !`, 'season');
-    // À la nouvelle saison, supprimer les remises des produits non saisonniers
-    resetExpiredDiscounts();
   }
-}
-
-function resetExpiredDiscounts() {
-  Object.keys(G.sections).forEach(sid => {
-    G.sections[sid].stock.forEach(item => {
-      const prod = productDef(item.productId);
-      if (prod.seasonal && !prod.seasonal.includes(season())) {
-        // La saison est passée, on retire la remise (produit déjà soldé ou va disparaître)
-        // On garde la remise si elle a été posée pour le liquider
-      }
-    });
-  });
 }
 
 function checkEndOfSeasonWarnings() {
   if (!nearEndOfSeason()) return;
-  const owned = ownedSections();
-  owned.forEach(sid => {
+  ownedSections().forEach(sid => {
     G.sections[sid].stock.forEach(item => {
       const prod = productDef(item.productId);
       if (prod.seasonal && prod.seasonal.includes(season()) && item.discount === 0) {
-        addLog(
-          `⚠️ ${prod.name} arrive en fin de saison ! Pensez à appliquer une remise pour écouler le stock.`,
-          'warning'
-        );
+        addLog(`⚠️ ${prod.name} arrive en fin de saison ! Appliquez une remise pour écouler le stock.`, 'warning');
       }
     });
   });
 }
 
-// ── Débloquer / améliorer une section ───────────────────────
+// ── Débloquer un rayon ───────────────────────────────────────
 function unlockSection(sid) {
   const def = sectionDef(sid);
   if (G.sections[sid].owned) return { ok: false, error: 'Rayon déjà ouvert.' };
@@ -355,16 +330,16 @@ function unlockSection(sid) {
   return { ok: true };
 }
 
-function upgradeSection(sid) {
-  const def = sectionDef(sid);
+// ── Acheter un slot supplémentaire ───────────────────────────
+function buySlot(sid) {
   const sec = G.sections[sid];
-  if (!sec.owned) return { ok: false, error: 'Rayon non ouvert.' };
-  if (sec.level >= 3) return { ok: false, error: 'Rayon déjà au niveau maximum.' };
-  const cost = def.upgradeCosts[sec.level - 1];
-  if (G.money < cost) return { ok: false, error: `Budget insuffisant. Coût : ${fmt(cost)}` };
-  G.money -= cost;
-  sec.level++;
-  addLog(`⬆️ ${def.name} agrandi au niveau ${sec.level} !`, 'unlock');
+  if (!sec.owned)         return { ok: false, error: 'Rayon non ouvert.' };
+  if (sec.slots >= MAX_SLOTS) return { ok: false, error: `Maximum atteint (${MAX_SLOTS} emplacements).` };
+  const cost = nextSlotCost(sid);
+  if (G.money < cost)     return { ok: false, error: `Budget insuffisant. Coût : ${fmt(cost)}` };
+  G.money   -= cost;
+  sec.slots  += 1;
+  addLog(`📐 ${sectionDef(sid).name} — emplacement acheté (${sec.slots}/${MAX_SLOTS})`, 'unlock');
   return { ok: true };
 }
 
@@ -388,8 +363,8 @@ function fmt(n) {
 function totalStockValue() {
   let v = 0;
   Object.values(G.sections).forEach(s => {
-    s.stock.forEach(i => { v += i.qty * sellPrice(i.buyPrice, i.discount); });
-    s.reserve.forEach(i => { v += i.qty * sellPrice(i.buyPrice); });
+    s.stock.forEach(i   => { v += i.qty   * sellPrice(i.buyPrice, i.discount); });
+    s.reserve.forEach(i => { v += i.qty   * sellPrice(i.buyPrice); });
   });
   return v;
 }

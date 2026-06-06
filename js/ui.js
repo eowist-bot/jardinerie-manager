@@ -2,8 +2,8 @@
 //  UI — Rendu & Interactions
 // ═══════════════════════════════════════════════════════════════
 
-let activeSection = null; // section sélectionnée dans la modal
-let modalMode = null;     // 'supplier' | 'stock' | 'unlock'
+let activeSection = null;
+let modalMode     = null;
 
 // ── Bootstrap ────────────────────────────────────────────────
 function uiInit() {
@@ -18,26 +18,20 @@ function renderAll() {
   renderLog();
 }
 
-// ── HUD (argent, semaine, saison) ────────────────────────────
+// ── HUD ──────────────────────────────────────────────────────
 function renderHUD() {
-  el('hud-money').textContent   = fmt(G.money);
-  el('hud-week').textContent    = `Semaine ${G.week}`;
-  el('hud-season').textContent  = season();
+  el('hud-money').textContent       = fmt(G.money);
+  el('hud-week').textContent        = `Semaine ${G.week}`;
+  el('hud-season').textContent      = season();
   el('hud-season-week').textContent = `(${G.weekInSeason}/${WEEKS_PER_SEASON})`;
   el('hud-stock-value').textContent = fmt(totalStockValue());
+  el('season-icon').textContent     = ['🌱','☀️','🍂','❄️'][G.seasonIdx];
 
-  const seasonIcons = ['🌱','☀️','🍂','❄️'];
-  el('season-icon').textContent = seasonIcons[G.seasonIdx];
-
-  // Phase indicator
   const phases = { supplier:'🏪 Approvisionnement', market:'🌿 Gestion du magasin', results:'📊 Résultats' };
   el('hud-phase').textContent = phases[G.phase] || '';
 
-  // Boutons selon la phase
-  const endBtn = el('btn-end-week');
-  if (endBtn) endBtn.style.display = G.phase === 'market' ? 'inline-flex' : 'none';
-  const supplierBtn = el('btn-supplier');
-  if (supplierBtn) supplierBtn.style.display = G.phase === 'supplier' ? 'inline-flex' : 'none';
+  el('btn-end-week').style.display = G.phase === 'market'   ? 'inline-flex' : 'none';
+  el('btn-supplier').style.display = G.phase === 'supplier' ? 'inline-flex' : 'none';
 }
 
 // ── Carte du magasin (top-down) ──────────────────────────────
@@ -50,34 +44,32 @@ function renderStoreMap() {
     const div = document.createElement('div');
     div.className = 'section-tile' + (sec.owned ? ' owned' : ' locked');
     div.dataset.sid = sid;
-    div.style.setProperty('--sec-color', def.color);
+    div.style.setProperty('--sec-color',  def.color);
     div.style.setProperty('--sec-border', def.borderColor);
-    div.style.setProperty('--sec-text', def.textColor);
+    div.style.setProperty('--sec-text',   def.textColor);
     div.style.gridArea = def.gridArea;
 
     if (sec.owned) {
-      const capacity  = sectionCapacity(sid);
-      const stockQty  = sectionStockCount(sid);
-      const fillPct   = Math.min(100, Math.round(stockQty / capacity * 100));
-      const nearEnd   = nearEndOfSeason() && hasSeasonalStock(sid);
+      const used       = occupiedSlots(sid);
+      const total      = sectionCapacity(sid);
+      const fillPct    = Math.round(used / total * 100);
+      const nearEnd    = nearEndOfSeason() && hasSeasonalStock(sid);
       const reserveQty = sec.reserve.reduce((a, r) => a + r.qty, 0);
 
       div.innerHTML = `
         <div class="tile-header">
           <span class="tile-icon">${def.icon}</span>
           <span class="tile-name">${def.name}</span>
-          <span class="tile-level">${'★'.repeat(sec.level)}${'☆'.repeat(3 - sec.level)}</span>
+          <span class="tile-slots">${used}/${total} 🪣</span>
         </div>
         <div class="shelf-bar-wrap">
           <div class="shelf-bar" style="width:${fillPct}%"></div>
         </div>
         <div class="tile-stats">
-          <span>📦 ${stockQty}/${capacity}</span>
           ${reserveQty > 0 ? `<span class="reserve-badge ${isSaturated(sid) ? 'saturated' : ''}">🏠 ${reserveQty}${isSaturated(sid) ? ' 🔒' : ''}</span>` : ''}
           ${nearEnd ? '<span class="warn-badge">⚠️ Fin saison</span>' : ''}
         </div>
-        <div class="shelf-mini">${renderMiniShelf(sid)}</div>
-      `;
+        <div class="shelf-mini">${renderMiniShelf(sid)}</div>`;
     } else {
       div.innerHTML = `
         <div class="tile-header">
@@ -88,8 +80,7 @@ function renderStoreMap() {
           <span class="lock-icon">🔒</span>
           <span class="lock-cost">${fmt(def.unlockCost)}</span>
         </div>
-        <div class="tile-desc">${def.description}</div>
-      `;
+        <div class="tile-desc">${def.description}</div>`;
     }
 
     div.addEventListener('click', () => onSectionClick(sid));
@@ -97,31 +88,27 @@ function renderStoreMap() {
   });
 }
 
+// Mini-étagère : exactement `sec.slots` cases, 1 case = 1 type de produit
 function renderMiniShelf(sid) {
-  const sec = G.sections[sid];
-  const MAX_SLOTS = 12; // toujours 12 cases, 1 par type de produit
+  const sec       = G.sections[sid];
+  const totalSlots = sectionCapacity(sid); // 6 à 12
   let html = '';
   let shown = 0;
 
   sec.stock.forEach(item => {
-    if (shown >= MAX_SLOTS) return;
-    const prod = productDef(item.productId);
+    if (shown >= totalSlots) return;
+    const prod        = productDef(item.productId);
     const isEndSeason = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
-    const warnClass = isEndSeason && item.discount === 0 ? ' warn' : '';
-    const discBadge = item.discount > 0
-      ? `<span class="mini-disc">-${Math.round(item.discount * 100)}%</span>`
-      : '';
+    const warnClass   = isEndSeason && item.discount === 0 ? ' warn' : '';
+    const discBadge   = item.discount > 0
+      ? `<span class="mini-disc">-${Math.round(item.discount * 100)}%</span>` : '';
     const tooltip = `${prod.name} ×${item.qty}${item.discount > 0 ? ' · -' + Math.round(item.discount * 100) + '%' : ''}`;
-    html += `
-      <div class="mini-slot${warnClass}" title="${tooltip}">
-        ${prod.icon}${discBadge}
-        <span class="mini-qty">×${item.qty}</span>
-      </div>`;
+    html += `<div class="mini-slot${warnClass}" title="${tooltip}">${prod.icon}${discBadge}<span class="mini-qty">×${item.qty}</span></div>`;
     shown++;
   });
 
-  // Cases vides jusqu'à 12
-  for (let i = shown; i < MAX_SLOTS; i++) {
+  // Slots vides (libres)
+  for (let i = shown; i < totalSlots; i++) {
     html += `<div class="mini-slot empty"></div>`;
   }
   return html;
@@ -138,30 +125,24 @@ function hasSeasonalStock(sid) {
 function renderLog() {
   const logEl = el('log');
   logEl.innerHTML = G.log.slice(0, 30).map(entry => {
-    const cls = {
-      info:'log-info', buy:'log-buy', sales:'log-sales',
-      warning:'log-warn', restock:'log-restock', unlock:'log-unlock',
-      season:'log-season', discount:'log-discount',
+    const cls = { info:'log-info', buy:'log-buy', sales:'log-sales', warning:'log-warn',
+      restock:'log-restock', unlock:'log-unlock', season:'log-season', discount:'log-discount',
     }[entry.type] || 'log-info';
     return `<div class="log-entry ${cls}"><span class="log-week">S${entry.week}</span> ${entry.msg}</div>`;
   }).join('');
 }
 
-// ── Modal section ─────────────────────────────────────────────
+// ── Routing clic section ─────────────────────────────────────
 function onSectionClick(sid) {
   const sec = G.sections[sid];
-  if (!sec.owned) {
-    openUnlockModal(sid);
-  } else if (G.phase === 'supplier') {
-    openSupplierModal(sid);
-  } else {
-    openStockModal(sid);
-  }
+  if (!sec.owned)               openUnlockModal(sid);
+  else if (G.phase === 'supplier') openSupplierModal(sid);
+  else                          openStockModal(sid);
 }
 
-// Modal déverrouillage
+// ── Modal déverrouillage ─────────────────────────────────────
 function openUnlockModal(sid) {
-  const def = sectionDef(sid);
+  const def       = sectionDef(sid);
   const canAfford = G.money >= def.unlockCost;
   showModal(`
     <h2>${def.icon} ${def.name}</h2>
@@ -181,25 +162,20 @@ function doUnlock(sid) {
   const res = unlockSection(sid);
   closeModal();
   if (!res.ok) { showToast(res.error, 'error'); return; }
-  // Générer les offres fournisseur pour ce rayon immédiatement
-  const products = Object.entries(CATALOG)
-    .filter(([, p]) => p.section === sid)
-    .map(([pid]) => pid);
-  const names = SUPPLIER_NAMES[sid];
+  // Générer offres fournisseur pour le nouveau rayon
+  const products     = Object.entries(CATALOG).filter(([, p]) => p.section === sid).map(([pid]) => pid);
+  const names        = SUPPLIER_NAMES[sid];
   const numSuppliers = 2 + Math.floor(Math.random() * 2);
-  const offers = [];
+  const offers       = [];
   const usedProducts = new Set();
   for (let s = 0; s < numSuppliers; s++) {
     const supplierName = names[s % names.length];
-    const numProducts = 2 + Math.floor(Math.random() * 3);
-    const available = products.filter(p => !usedProducts.has(p));
-    const chosen = shuffle([...available]).slice(0, Math.min(numProducts, available.length));
-    chosen.forEach(pid => {
+    const available    = products.filter(p => !usedProducts.has(p));
+    shuffle([...available]).slice(0, Math.min(2 + Math.floor(Math.random() * 3), available.length)).forEach(pid => {
       usedProducts.add(pid);
-      const base = productDef(pid).price;
+      const base      = productDef(pid).price;
       const unitPrice = Math.round(base * (0.85 + Math.random() * 0.3) * 100) / 100;
-      const qty = 3 + Math.floor(Math.random() * 8);
-      offers.push({ supplierName, productId: pid, qty, unitPrice });
+      offers.push({ supplierName, productId: pid, qty: 3 + Math.floor(Math.random() * 8), unitPrice });
     });
   }
   G.supplierOffers[sid] = offers;
@@ -208,27 +184,29 @@ function doUnlock(sid) {
   showToast(`${sectionDef(sid).name} ouvert ! Passez commande.`, 'success');
 }
 
-// Modal fournisseur
+// ── Modal fournisseur ────────────────────────────────────────
 function openSupplierModal(sid) {
   activeSection = sid;
-  modalMode = 'supplier';
-  // Si rayon saturé (réserve non vide), on affiche l'info et on bloque
+  modalMode     = 'supplier';
+
   if (isSaturated(sid)) {
-    const def = sectionDef(sid);
-    const sec = G.sections[sid];
-    const reserveQty = sec.reserve.reduce((a, r) => a + r.qty, 0);
+    const def      = sectionDef(sid);
+    const sec      = G.sections[sid];
+    const resTotal = sec.reserve.reduce((a, r) => a + r.qty, 0);
     showModal(`
       <h2>${def.icon} ${def.name} — Rayon saturé</h2>
       <div class="saturated-msg">
         <span class="sat-icon">🏠</span>
         <div>
-          <strong>Réserve pleine : ${reserveQty} article(s) en attente.</strong>
-          <p>Le stock en réserve n'est pas encore écoulé. Aucune nouvelle commande n'est possible pour ce rayon tant que la réserve n'est pas vide.</p>
+          <strong>Réserve non vide : ${resTotal} article(s) en attente.</strong>
+          <p>Les emplacements sont tous occupés et la réserve déborde encore.
+          Aucune nouvelle commande n'est possible tant que la réserve ne se vide pas.</p>
         </div>
       </div>
+      <h3>Contenu de la réserve</h3>
       ${sec.reserve.map(r => {
         const prod = productDef(r.productId);
-        return `<div class="reserve-row">${prod.icon} <strong>${prod.name}</strong> ×${r.qty}</div>`;
+        return `<div class="reserve-row">${prod.icon} <strong>${prod.name}</strong> ×${r.qty} · acheté ${fmt(r.buyPrice)}/u</div>`;
       }).join('')}
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeModal()">Fermer</button>
@@ -240,16 +218,15 @@ function openSupplierModal(sid) {
 }
 
 function renderSupplierModal(sid) {
-  const def = sectionDef(sid);
-  const sec = G.sections[sid];
-  const offers = G.supplierOffers[sid] || [];
-  const cart = G.cart[sid] || [];
+  const def      = sectionDef(sid);
+  const sec      = G.sections[sid];
+  const offers   = G.supplierOffers[sid] || [];
+  const cart     = G.cart[sid] || [];
   const cartTotal = cart.reduce((a, c) => a + c.qty * c.unitPrice, 0);
-  const cap = sectionCapacity(sid);
-  const onShelf = sectionStockCount(sid);
-  const reserveQty = sec.reserve.reduce((a, r) => a + r.qty, 0);
+  const used     = occupiedSlots(sid);
+  const total    = sectionCapacity(sid);
+  const free     = freeSlots(sid);
 
-  // Grouper offres par fournisseur
   const bySupplier = {};
   offers.forEach((o, idx) => {
     if (!bySupplier[o.supplierName]) bySupplier[o.supplierName] = [];
@@ -260,17 +237,26 @@ function renderSupplierModal(sid) {
     <div class="supplier-block">
       <div class="supplier-name">🚚 ${name}</div>
       ${items.map(({ productId, qty, unitPrice, idx }) => {
-        const prod = productDef(productId);
-        const inCart = cart.find(c => c.productId === productId);
-        const sell = sellPrice(unitPrice);
-        const profit = sell - unitPrice;
-        const isSeasonal = prod.seasonal ? (prod.seasonal.includes(season()) ? '✅ En saison' : '❌ Hors saison') : '🔄 Toute saison';
+        const prod      = productDef(productId);
+        const inCart    = cart.find(c => c.productId === productId);
+        const sell      = sellPrice(unitPrice);
+        const profit    = sell - unitPrice;
+        const alreadyOn = typeOnShelf(sid, productId);
+        const needSlot  = !alreadyOn;
+        const slotLabel = alreadyOn
+          ? '<span class="slot-tag existing">🔄 Réassort</span>'
+          : (free > 0
+              ? '<span class="slot-tag new-slot">➕ Nouveau slot</span>'
+              : '<span class="slot-tag no-slot">📦 → Réserve</span>');
+        const seasonLabel = prod.seasonal
+          ? (prod.seasonal.includes(season()) ? '✅ En saison' : '❌ Hors saison')
+          : '🔄 Toute saison';
         return `
           <div class="offer-row ${inCart ? 'in-cart' : ''}">
             <span class="offer-icon">${prod.icon}</span>
             <div class="offer-info">
               <strong>${prod.name}</strong>
-              <small>${isSeasonal}</small>
+              <small>${seasonLabel} ${slotLabel}</small>
             </div>
             <div class="offer-nums">
               <span class="offer-qty">×${qty}</span>
@@ -279,7 +265,7 @@ function renderSupplierModal(sid) {
               <span class="offer-total">Total : ${fmt(qty * unitPrice)}</span>
             </div>
             <button class="btn-add-cart ${inCart ? 'added' : ''}" onclick="toggleCartItem('${sid}', ${idx})">
-              ${inCart ? '✓ Retiré du panier' : '+ Commander'}
+              ${inCart ? '✓ Retiré' : '+ Commander'}
             </button>
           </div>`;
       }).join('')}
@@ -289,8 +275,7 @@ function renderSupplierModal(sid) {
   showModal(`
     <h2>${def.icon} ${def.name} — Commande fournisseur</h2>
     <div class="modal-stats-row">
-      <span>Rayon : ${onShelf}/${cap} items</span>
-      ${reserveQty > 0 ? `<span>Réserve : ${reserveQty} items</span>` : ''}
+      <span>Emplacements : <strong>${used}/${total}</strong> (${free} libre${free > 1 ? 's' : ''})</span>
       <span>Caisse : ${fmt(G.money)}</span>
     </div>
     <div class="suppliers-list">${suppliersHtml}</div>
@@ -307,38 +292,41 @@ function renderSupplierModal(sid) {
 function toggleCartItem(sid, offerIdx) {
   const offer = G.supplierOffers[sid][offerIdx];
   const inCart = G.cart[sid].find(c => c.productId === offer.productId);
-  if (inCart) {
-    removeFromCart(sid, offer.productId);
-  } else {
-    addToCart(sid, offerIdx);
-  }
+  if (inCart) removeFromCart(sid, offer.productId);
+  else        addToCart(sid, offerIdx);
   renderSupplierModal(sid);
 }
 
-// Modal stock / gestion rayon
+// ── Modal stock / gestion rayon ──────────────────────────────
 function openStockModal(sid) {
   activeSection = sid;
-  modalMode = 'stock';
+  modalMode     = 'stock';
   renderStockModal(sid);
 }
 
 function renderStockModal(sid) {
-  const def = sectionDef(sid);
-  const sec = G.sections[sid];
-  const cap = sectionCapacity(sid);
-  const onShelf = sectionStockCount(sid);
+  const def      = sectionDef(sid);
+  const sec      = G.sections[sid];
+  const used     = occupiedSlots(sid);
+  const total    = sectionCapacity(sid);
+  const free     = freeSlots(sid);
   const reserveQty = sec.reserve.reduce((a, r) => a + r.qty, 0);
-  const upgradeLevel = sec.level < 3 ? sec.level : null;
-  const upgradeCost  = upgradeLevel !== null ? def.upgradeCosts[sec.level - 1] : null;
-  const canUpgrade   = upgradeCost !== null && G.money >= upgradeCost;
 
+  // ── Indicateur visuel des slots ──
+  const slotsViz = Array.from({ length: MAX_SLOTS }, (_, i) => {
+    if (i < used)  return `<div class="slot-dot used" title="Occupé"></div>`;
+    if (i < total) return `<div class="slot-dot free" title="Libre"></div>`;
+    return `<div class="slot-dot locked" title="Non acheté"></div>`;
+  }).join('');
+
+  // ── Rayon (stock) ──
   const stockRows = sec.stock.length === 0
     ? `<p class="empty-stock">Aucun article en rayon.</p>`
     : sec.stock.map(item => {
-        const prod = productDef(item.productId);
+        const prod      = productDef(item.productId);
         const isSeasEnd = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
-        const discPct = Math.round(item.discount * 100);
-        const sellAmt = sellPrice(item.buyPrice, item.discount);
+        const discPct   = Math.round(item.discount * 100);
+        const sellAmt   = sellPrice(item.buyPrice, item.discount);
         return `
           <div class="stock-row ${isSeasEnd && item.discount === 0 ? 'warn-row' : ''}">
             <span class="stock-icon">${prod.icon}</span>
@@ -357,36 +345,78 @@ function renderStockModal(sid) {
           </div>`;
       }).join('');
 
-  const reserveRows = sec.reserve.length === 0 ? '' : `
-    <h3>🏠 Réserve (${reserveQty} articles)</h3>
-    ${sec.reserve.map(r => {
-      const prod = productDef(r.productId);
-      return `<div class="reserve-row">${prod.icon} <strong>${prod.name}</strong> ×${r.qty} (acheté ${fmt(r.buyPrice)}/u)</div>`;
-    }).join('')}`;
+  // ── Réserve ──
+  const reserveSection = sec.reserve.length === 0
+    ? `<div class="reserve-section empty-reserve">
+        <div class="reserve-header">🏠 Réserve</div>
+        <p class="empty-stock">Réserve vide.</p>
+       </div>`
+    : `<div class="reserve-section">
+        <div class="reserve-header">🏠 Réserve — ${reserveQty} article(s) en attente
+          <span class="reserve-note">Sera réapprovisionné automatiquement en début de semaine</span>
+        </div>
+        ${sec.reserve.map(r => {
+          const prod = productDef(r.productId);
+          const alreadyOnShelf = typeOnShelf(sid, r.productId);
+          const label = alreadyOnShelf
+            ? `<span class="slot-tag existing">🔄 Type déjà en rayon</span>`
+            : (free > 0
+                ? `<span class="slot-tag new-slot">➕ Prendra un slot libre</span>`
+                : `<span class="slot-tag no-slot">⏳ Attente slot libre</span>`);
+          return `
+            <div class="reserve-row-detail">
+              <span class="stock-icon">${prod.icon}</span>
+              <div class="stock-info">
+                <strong>${prod.name}</strong>
+                <small>×${r.qty} · acheté ${fmt(r.buyPrice)}/u · vente ${fmt(sellPrice(r.buyPrice))}/u</small>
+                ${label}
+              </div>
+            </div>`;
+        }).join('')}
+       </div>`;
+
+  // ── Achat de slot supplémentaire ──
+  const canBuyMore = total < MAX_SLOTS;
+  const nextCost   = canBuyMore ? nextSlotCost(sid) : null;
+  const canAfford  = nextCost !== null && G.money >= nextCost;
+  const slotBuyHtml = canBuyMore
+    ? `<button class="btn-upgrade ${canAfford ? '' : 'disabled'}" onclick="doBuySlot('${sid}')">
+         📐 Acheter un emplacement supplémentaire — ${fmt(nextCost)}
+         <small style="display:block;font-size:0.72rem;font-weight:400;opacity:0.8">
+           ${total + 1}/${MAX_SLOTS} emplacements
+         </small>
+       </button>`
+    : `<span class="max-level">✅ Emplacements au maximum (${MAX_SLOTS}/${MAX_SLOTS})</span>`;
 
   showModal(`
     <h2>${def.icon} ${def.name} — Gestion du rayon</h2>
-    <div class="modal-stats-row">
-      <span>Niveau ${'★'.repeat(sec.level)}${'☆'.repeat(3-sec.level)}</span>
-      <span>Rayon : ${onShelf}/${cap}</span>
-      ${reserveQty > 0 ? `<span>Réserve : ${reserveQty}</span>` : ''}
+
+    <div class="slots-overview">
+      <div class="slots-viz">${slotsViz}</div>
+      <div class="slots-legend">
+        <span class="slot-dot used"></span> Occupé (${used})
+        &nbsp;·&nbsp;
+        <span class="slot-dot free"></span> Libre (${free})
+        &nbsp;·&nbsp;
+        <span class="slot-dot locked"></span> Non acheté (${MAX_SLOTS - total})
+      </div>
     </div>
+
+    <h3>📦 En rayon (${used} emplacement${used > 1 ? 's' : ''} occupé${used > 1 ? 's' : ''})</h3>
     <div class="stock-list">${stockRows}</div>
-    ${reserveRows}
+
+    ${reserveSection}
+
     <div class="modal-actions">
-      ${upgradeCost !== null ? `
-        <button class="btn-upgrade ${canUpgrade ? '' : 'disabled'}" onclick="doUpgrade('${sid}')">
-          ⬆️ Agrandir le rayon — ${fmt(upgradeCost)}
-        </button>` : '<span class="max-level">✅ Rayon au niveau maximum</span>'}
+      ${slotBuyHtml}
       <button class="btn-secondary" onclick="closeModal()">Fermer</button>
     </div>
   `);
 }
 
 function previewDiscount(input, sid, itemId) {
-  const pct = parseInt(input.value);
   const label = input.previousElementSibling;
-  if (label) label.innerHTML = `Remise : <strong>${pct}%</strong>`;
+  if (label) label.innerHTML = `Remise : <strong>${input.value}%</strong>`;
 }
 
 function applyDiscount(sid, itemId, value) {
@@ -396,12 +426,14 @@ function applyDiscount(sid, itemId, value) {
   renderLog();
 }
 
-function doUpgrade(sid) {
-  const res = upgradeSection(sid);
+function doBuySlot(sid) {
+  const res = buySlot(sid);
   if (!res.ok) { showToast(res.error, 'error'); return; }
-  closeModal();
-  renderAll();
-  showToast(`${sectionDef(sid).name} agrandi !`, 'success');
+  renderStockModal(sid);
+  renderStoreMap();
+  renderHUD();
+  renderLog();
+  showToast(`Nouvel emplacement acheté ! ${sectionDef(sid).name} : ${G.sections[sid].slots}/${MAX_SLOTS}`, 'success');
 }
 
 // ── Validation approvisionnement ─────────────────────────────
@@ -414,9 +446,8 @@ function doValidatePurchases() {
 
 // ── Fin de semaine ────────────────────────────────────────────
 function doEndWeek() {
-  const results = endWeek();
+  showResultsModal(endWeek());
   renderAll();
-  showResultsModal(results);
 }
 
 function showResultsModal(results) {
@@ -433,7 +464,7 @@ function showResultsModal(results) {
       <div class="result-section">
         <div class="result-section-header">${def.icon} ${def.name} — <strong>${fmt(secRevenue)}</strong></div>
         ${items.map(r => {
-          const prod = productDef(r.productId);
+          const prod    = productDef(r.productId);
           const discTxt = r.wasDiscounted ? ` <span class="disc-label">-${Math.round(r.discount*100)}%</span>` : '';
           return `<div class="result-row">${prod.icon} ${prod.name} — ${r.sold} vendu(s) × ${fmt(r.unitRevenue)}${discTxt} = <strong>${fmt(r.revenue)}</strong></div>`;
         }).join('')}
@@ -457,19 +488,17 @@ function startNextWeek() {
 }
 
 // ── Helpers DOM ──────────────────────────────────────────────
-function el(id) { return document.getElementById(id); }
+function el(id)     { return document.getElementById(id); }
 
 function showModal(html) {
-  const overlay = el('modal-overlay');
-  const content = el('modal-content');
-  content.innerHTML = html;
-  overlay.classList.add('visible');
+  el('modal-content').innerHTML = html;
+  el('modal-overlay').classList.add('visible');
 }
 
 function closeModal() {
   el('modal-overlay').classList.remove('visible');
   activeSection = null;
-  modalMode = null;
+  modalMode     = null;
 }
 
 function showToast(msg, type = 'info') {
@@ -490,23 +519,23 @@ function bindGlobalEvents() {
   });
 }
 
-// Panneau récapitulatif fournisseur (vue globale de tous les paniers)
+// ── Panneau récapitulatif fournisseur ────────────────────────
 function openSupplierPanel() {
   const owned = ownedSections();
   const cartStatus = owned.map(sid => {
-    const def = sectionDef(sid);
-    const cart = G.cart[sid] || [];
+    const def   = sectionDef(sid);
+    const cart  = G.cart[sid] || [];
     const total = cart.reduce((a, c) => a + c.qty * c.unitPrice, 0);
-    const sat = isSaturated(sid);
+    const sat   = isSaturated(sid);
     let statusText, rowClass;
     if (sat) {
-      rowClass = 'saturated';
+      rowClass   = 'saturated';
       statusText = '<em>🏠 Réserve pleine — commande bloquée</em>';
     } else if (cart.length > 0) {
-      rowClass = 'has-items';
+      rowClass   = 'has-items';
       statusText = `${cart.length} ligne(s) — ${fmt(total)}`;
     } else {
-      rowClass = 'empty';
+      rowClass   = 'empty';
       statusText = '<em>⚠️ Aucune commande !</em>';
     }
     return `
@@ -517,15 +546,14 @@ function openSupplierPanel() {
       </div>`;
   }).join('');
 
-  // Tous les rayons non saturés doivent avoir une commande
   const allOrdered = owned.every(sid => isSaturated(sid) || (G.cart[sid] || []).length > 0);
   const grandTotal = owned.reduce((a, sid) => a + (G.cart[sid] || []).reduce((b, c) => b + c.qty * c.unitPrice, 0), 0);
 
   showModal(`
     <h2>🏪 Récapitulatif des commandes</h2>
-    <p>Vous devez commander au moins 1 produit par rayon.</p>
+    <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:12px">Au moins 1 produit commandé par rayon disponible.</p>
     <div class="supplier-summary">${cartStatus}</div>
-    <p class="grand-total">Total commandes : <strong>${fmt(grandTotal)}</strong> · Caisse : <strong>${fmt(G.money)}</strong></p>
+    <p class="grand-total">Total : <strong>${fmt(grandTotal)}</strong> · Caisse : <strong>${fmt(G.money)}</strong></p>
     <div class="modal-actions">
       <button class="btn-primary ${allOrdered && grandTotal <= G.money ? '' : 'disabled'}"
         onclick="${allOrdered && grandTotal <= G.money ? 'closeModal(); doValidatePurchases()' : ''}">
