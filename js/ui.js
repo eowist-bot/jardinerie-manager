@@ -307,8 +307,6 @@ function renderSupplierModal(sid) {
       }).join('')}
     </div>`).join('');
 
-  const forecastHtml = renderWeeklyForecastWidget();
-
   showModal(`
     <h2>${def.icon} ${def.name} — Commande fournisseur
       ${isPromoSection ? '<span class="promo-header-badge">🏷️ SEMAINE PROMO</span>' : ''}
@@ -317,7 +315,6 @@ function renderSupplierModal(sid) {
       <span>Slots : <strong>${used}/${total}</strong> (${free} libre${free !== 1 ? 's' : ''})</span>
       <span>Caisse : ${fmt(G.money)}</span>
     </div>
-    ${forecastHtml}
     <div class="suppliers-list">${suppliersHtml}</div>
     <div class="cart-summary">
       <strong>🛒 Panier : ${cart.length} ligne(s) — ${fmt(cartTotal)}</strong>
@@ -448,12 +445,16 @@ function renderAllocationModal(sid) {
           ? `<span class="slot-tag new-slot">➕ 1 slot libre (${freeDyn} dispo)</span>`
           : '<span class="slot-tag no-slot">⚠️ Plus de slot libre</span>');
 
-    const oosTag  = oos   ? `<span class="badge-oos">🍂 Hors saison</span>` : '';
-    const promoTag = isPromo
-      ? `<span class="alloc-promo-tag">🏷️ PROMO -${Math.round(r.promoRate*100)}% · marge renforcée</span>`
-      : '';
+    const oosTag   = oos     ? `<span class="badge-oos">🍂 Hors saison</span>` : '';
+    const promoTag = isPromo ? `<span class="alloc-promo-tag">🏷️ PROMO -${Math.round(r.promoRate*100)}%</span>` : '';
 
-    const sellAmt = catalogSellPrice(r.productId);
+    // Tendance : icône + libellé court sur la même ligne que le nom
+    const isHot  = G.weeklyForecast.hot.includes(r.productId);
+    const isCold = G.weeklyForecast.cold.includes(r.productId);
+    const trendTag = isHot
+      ? `<span class="alloc-trend hot">🔥 Hausse</span>`
+      : (isCold ? `<span class="alloc-trend cold">❄️ Baisse</span>` : '');
+
     const profitPerUnit = catalogSellPrice(r.productId) - r.buyPrice;
 
     return `
@@ -461,9 +462,10 @@ function renderAllocationModal(sid) {
         <div class="alloc-row-left">
           <span class="stock-icon">${prod.icon}</span>
           <div class="stock-info">
-            <strong>${prod.name}</strong>
-            ${promoTag}
-            <small>×${r.qty} · achat <strong>${fmt(r.buyPrice)}/u</strong> → vente ${fmt(catalogSellPrice(r.productId))}/u
+            <div class="alloc-name-row">
+              <strong>${prod.name}</strong>${trendTag}${promoTag}
+            </div>
+            <small>×${r.qty} · achat <strong>${fmt(r.buyPrice)}/u</strong> · vente ${fmt(catalogSellPrice(r.productId))}/u
               · bén. <strong class="${profitPerUnit > 0 ? 'profit-pos' : 'profit-neg'}">${fmt(profitPerUnit)}/u</strong>
             </small>
             <div class="alloc-tags">${slotInfo}${oosTag}</div>

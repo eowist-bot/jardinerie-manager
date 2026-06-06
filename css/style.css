@@ -1204,6 +1204,23 @@ html, body {
   background: rgba(200,168,75,0.08) !important;
   box-shadow: inset 3px 0 0 var(--gold);
 }
+.alloc-name-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+.alloc-trend {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.alloc-trend.hot  { background: rgba(229,57,53,0.18);  color: #ef9a9a; }
+.alloc-trend.cold { background: rgba(100,181,246,0.18); color: #90caf9; }
+
 .alloc-promo-tag {
   display: inline-block;
   background: linear-gradient(135deg, #b71c1c, #e53935);
