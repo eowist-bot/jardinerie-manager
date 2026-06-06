@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌿 Ma Jardinerie</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── HUD ──────────────────────────────────────────────── -->
+  <header id="hud">
+    <h1>🌿 Ma Jardinerie</h1>
+
+    <div class="hud-chip money">
+      <span class="chip-label">Caisse</span>
+      <span id="hud-money">5 000 €</span>
+    </div>
+
+    <div class="hud-chip season">
+      <span id="season-icon">🌱</span>
+      <span id="hud-season">Printemps</span>
+      <span class="chip-label" id="hud-season-week">(1/13)</span>
+    </div>
+
+    <div class="hud-chip">
+      <span class="chip-label">⏱</span>
+      <span id="hud-week">Semaine 1</span>
+    </div>
+
+    <div class="hud-chip stock">
+      <span class="chip-label">Stock</span>
+      <span id="hud-stock-value">0 €</span>
+    </div>
+
+    <span id="hud-phase"></span>
+
+    <div class="hud-actions">
+      <button id="btn-supplier" class="btn-hud secondary" style="display:none">
+        🏪 Voir commandes
+      </button>
+      <button id="btn-end-week" class="btn-hud primary" style="display:none">
+        📅 Clore la semaine
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Corps ────────────────────────────────────────────── -->
+  <div id="main-body">
+
+    <!-- Carte du magasin -->
+    <div id="store-area">
+      <div id="store-map"></div>
+    </div>
+
+    <!-- Journal -->
+    <aside id="sidebar">
+      <div class="sidebar-title">📋 Journal</div>
+      <div id="log"></div>
+    </aside>
+
+  </div><!-- /main-body -->
+
+</div><!-- /app -->
+
+<!-- ── Modal ──────────────────────────────────────────────── -->
+<div id="modal-overlay">
+  <div id="modal-content"></div>
+</div>
+
+<!-- ── Scripts ───────────────────────────────────────────── -->
+<script src="data/catalog.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', uiInit);
+</script>
+
+</body>
+</html>
