@@ -90,24 +90,36 @@ function renderStoreMap() {
 
 // Mini-étagère : exactement `sec.slots` cases, 1 case = 1 type de produit
 function renderMiniShelf(sid) {
-  const sec       = G.sections[sid];
-  const totalSlots = sectionCapacity(sid); // 6 à 12
-  let html = '';
+  const sec        = G.sections[sid];
+  const totalSlots = sectionCapacity(sid);
+  let html  = '';
   let shown = 0;
 
   sec.stock.forEach(item => {
     if (shown >= totalSlots) return;
-    const prod        = productDef(item.productId);
-    const isEndSeason = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
-    const warnClass   = isEndSeason && item.discount === 0 ? ' warn' : '';
-    const discBadge   = item.discount > 0
+    const prod       = productDef(item.productId);
+    const oos        = isOutOfSeason(item.productId);
+    const nearEnd    = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
+    const hasDisc    = item.discount > 0;
+
+    // Priorité des classes : hors-saison > fin de saison > normal
+    let slotClass = '';
+    if (oos && !hasDisc)    slotClass = ' out-season';
+    else if (oos && hasDisc) slotClass = ' out-season discounted';
+    else if (nearEnd && !hasDisc) slotClass = ' warn';
+
+    const discBadge = hasDisc
       ? `<span class="mini-disc">-${Math.round(item.discount * 100)}%</span>` : '';
-    const tooltip = `${prod.name} ×${item.qty}${item.discount > 0 ? ' · -' + Math.round(item.discount * 100) + '%' : ''}`;
-    html += `<div class="mini-slot${warnClass}" title="${tooltip}">${prod.icon}${discBadge}<span class="mini-qty">×${item.qty}</span></div>`;
+    const oosBadge = oos && !hasDisc
+      ? `<span class="mini-oos">↓1</span>` : '';   // indicateur -1/semaine
+    const tooltip = `${prod.name} ×${item.qty}`
+      + (oos ? ' · ⚠ Hors saison (-1/sem)' : '')
+      + (hasDisc ? ` · -${Math.round(item.discount * 100)}%` : '');
+
+    html += `<div class="mini-slot${slotClass}" title="${tooltip}">${prod.icon}${discBadge}${oosBadge}<span class="mini-qty">×${item.qty}</span></div>`;
     shown++;
   });
 
-  // Slots vides (libres)
   for (let i = shown; i < totalSlots; i++) {
     html += `<div class="mini-slot empty"></div>`;
   }
@@ -127,6 +139,7 @@ function renderLog() {
   logEl.innerHTML = G.log.slice(0, 30).map(entry => {
     const cls = { info:'log-info', buy:'log-buy', sales:'log-sales', warning:'log-warn',
       restock:'log-restock', unlock:'log-unlock', season:'log-season', discount:'log-discount',
+      decay:'log-decay',
     }[entry.type] || 'log-info';
     return `<div class="log-entry ${cls}"><span class="log-week">S${entry.week}</span> ${entry.msg}</div>`;
   }).join('');
@@ -320,21 +333,43 @@ function renderStockModal(sid) {
   }).join('');
 
   // ── Rayon (stock) ──
-  const stockRows = sec.stock.length === 0
+  // Trier : hors saison sans remise en premier (urgence)
+  const sortedStock = [...sec.stock].sort((a, b) => {
+    const aOos = isOutOfSeason(a.productId) && a.discount === 0;
+    const bOos = isOutOfSeason(b.productId) && b.discount === 0;
+    return (bOos ? 1 : 0) - (aOos ? 1 : 0);
+  });
+
+  const stockRows = sortedStock.length === 0
     ? `<p class="empty-stock">Aucun article en rayon.</p>`
-    : sec.stock.map(item => {
+    : sortedStock.map(item => {
         const prod      = productDef(item.productId);
+        const oos       = isOutOfSeason(item.productId);
         const isSeasEnd = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
         const discPct   = Math.round(item.discount * 100);
         const sellAmt   = sellPrice(item.buyPrice, item.discount);
+
+        let rowClass = '';
+        let urgenceBadge = '';
+        if (oos && item.discount === 0) {
+          rowClass = 'oos-row';
+          urgenceBadge = `<span class="badge-oos">🍂 Hors saison — perd 1 unité/semaine !</span>`;
+        } else if (oos && item.discount > 0) {
+          rowClass = 'oos-row discounted';
+          urgenceBadge = `<span class="badge-oos-disc">🏷️ En solde hors saison</span>`;
+        } else if (isSeasEnd && item.discount === 0) {
+          rowClass = 'warn-row';
+          urgenceBadge = `<span class="badge-warn">⚠️ Fin de saison proche !</span>`;
+        }
+
         return `
-          <div class="stock-row ${isSeasEnd && item.discount === 0 ? 'warn-row' : ''}">
+          <div class="stock-row ${rowClass}">
             <span class="stock-icon">${prod.icon}</span>
             <div class="stock-info">
               <strong>${prod.name}</strong>
-              <small>Acheté ${fmt(item.buyPrice)}/u · Prix vente ${fmt(sellAmt)}/u · Qté : ${item.qty}</small>
-              ${isSeasEnd && item.discount === 0 ? '<span class="badge-warn">⚠️ Fin de saison !</span>' : ''}
-              ${item.discount > 0 ? `<span class="badge-disc">🏷️ -${discPct}%</span>` : ''}
+              <small>Acheté ${fmt(item.buyPrice)}/u · Vente ${fmt(sellAmt)}/u · Qté : <strong>${item.qty}</strong></small>
+              ${urgenceBadge}
+              ${item.discount > 0 && !oos ? `<span class="badge-disc">🏷️ -${discPct}%</span>` : ''}
             </div>
             <div class="discount-ctrl">
               <label>Remise : <strong>${discPct}%</strong></label>
@@ -510,10 +545,83 @@ function showToast(msg, type = 'info') {
   setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 400); }, 3000);
 }
 
+// ── Modal réserve globale ────────────────────────────────────
+function openReserveModal() {
+  const owned = ownedSections();
+  const sectionsWithReserve = owned.filter(sid => G.sections[sid].reserve.length > 0);
+  const totalItems = sectionsWithReserve.reduce((a, sid) =>
+    a + G.sections[sid].reserve.reduce((b, r) => b + r.qty, 0), 0);
+
+  if (sectionsWithReserve.length === 0) {
+    showModal(`
+      <h2>📦 Réserve globale</h2>
+      <p class="empty-stock" style="text-align:center;padding:24px 0">
+        🎉 Aucun article en réserve — tous les rayons sont à jour !
+      </p>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal()">Fermer</button>
+      </div>
+    `);
+    return;
+  }
+
+  const sectionsHtml = sectionsWithReserve.map(sid => {
+    const def  = sectionDef(sid);
+    const sec  = G.sections[sid];
+    const used = occupiedSlots(sid);
+    const tot  = sectionCapacity(sid);
+    const free = freeSlots(sid);
+
+    const items = sec.reserve.map(r => {
+      const prod    = productDef(r.productId);
+      const oos     = isOutOfSeason(r.productId);
+      const onShelf = typeOnShelf(sid, r.productId);
+      const slotTag = onShelf
+        ? `<span class="slot-tag existing">🔄 Réassort</span>`
+        : (free > 0
+            ? `<span class="slot-tag new-slot">➕ Slot libre dispo</span>`
+            : `<span class="slot-tag no-slot">⏳ Attente slot</span>`);
+      const oosTag = oos
+        ? `<span class="badge-oos" style="font-size:0.65rem">🍂 Hors saison</span>`
+        : '';
+      return `
+        <div class="reserve-row-detail ${oos ? 'out-season' : ''}">
+          <span class="stock-icon">${prod.icon}</span>
+          <div class="stock-info">
+            <strong>${prod.name}</strong>
+            <small>×${r.qty} · acheté ${fmt(r.buyPrice)}/u · vente ${fmt(sellPrice(r.buyPrice))}/u</small>
+            ${oosTag} ${slotTag}
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="reserve-section" style="margin-bottom:10px">
+        <div class="reserve-header">
+          ${def.icon} ${def.name}
+          <span class="reserve-note">${used}/${tot} slots · ${free} libre${free !== 1 ? 's' : ''}</span>
+        </div>
+        ${items}
+      </div>`;
+  }).join('');
+
+  showModal(`
+    <h2>📦 Réserve globale — ${totalItems} article(s)</h2>
+    <p style="font-size:0.82rem;color:var(--text-dim);margin-bottom:14px">
+      Les articles en réserve sont automatiquement mis en rayon en début de semaine dès qu'un slot se libère.
+    </p>
+    ${sectionsHtml}
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Fermer</button>
+    </div>
+  `);
+}
+
 // ── Bindings globaux ─────────────────────────────────────────
 function bindGlobalEvents() {
   el('btn-end-week').addEventListener('click', doEndWeek);
   el('btn-supplier').addEventListener('click', openSupplierPanel);
+  el('btn-reserve').addEventListener('click', openReserveModal);
   el('modal-overlay').addEventListener('click', e => {
     if (e.target === el('modal-overlay')) closeModal();
   });

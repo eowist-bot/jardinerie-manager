@@ -274,8 +274,17 @@ html, body {
   gap: 0;
   line-height: 1;
 }
-.mini-slot.empty { background: rgba(0,0,0,0.15); }
-.mini-slot.warn  { background: rgba(255,152,0,0.2); outline: 1px solid #ffa726; }
+.mini-slot.empty      { background: rgba(0,0,0,0.15); }
+.mini-slot.warn       { background: rgba(255,152,0,0.2); outline: 1px solid #ffa726; }
+/* Hors saison : rouge orangé + animation de pulsation douce */
+.mini-slot.out-season {
+  background: rgba(183,28,28,0.25);
+  outline: 1px solid rgba(229,57,53,0.6);
+}
+.mini-slot.out-season.discounted {
+  background: rgba(183,28,28,0.12);
+  outline: 1px solid rgba(239,154,154,0.4);
+}
 .mini-qty {
   font-size: 8px;
   color: rgba(255,255,255,0.55);
@@ -292,6 +301,18 @@ html, body {
   border-radius: 0 3px 0 3px;
   padding: 0 2px;
   line-height: 9px;
+}
+/* Badge -1/semaine sur les slots hors saison */
+.mini-oos {
+  position: absolute;
+  bottom: 0; left: 0;
+  font-size: 6px;
+  background: rgba(183,28,28,0.85);
+  color: #ffcdd2;
+  border-radius: 3px 0 0 3px;
+  padding: 0 2px;
+  line-height: 9px;
+  font-weight: 700;
 }
 
 /* Section verrouillée */
@@ -352,6 +373,7 @@ html, body {
 .log-unlock  { background: rgba(76,175,80,0.15);   color: #81c784; }
 .log-season  { background: rgba(171,71,188,0.15);  color: #ce93d8; }
 .log-discount{ background: rgba(229,57,53,0.12);   color: #ef9a9a; }
+.log-decay   { background: rgba(183,28,28,0.15);   color: #ef9a9a; font-style: italic; }
 
 /* ── Modal ────────────────────────────────────────────────────── */
 #modal-overlay {
@@ -496,7 +518,16 @@ html, body {
   border-radius: 8px;
   border: 1px solid var(--border);
 }
-.stock-row.warn-row { border-color: #ffa726; background: rgba(255,152,0,0.08); }
+.stock-row.warn-row    { border-color: #ffa726; background: rgba(255,152,0,0.08); }
+/* Hors saison : bordure rouge, fond rouge sombre */
+.stock-row.oos-row {
+  border-color: rgba(229,57,53,0.6);
+  background: rgba(183,28,28,0.12);
+}
+.stock-row.oos-row.discounted {
+  border-color: rgba(239,154,154,0.4);
+  background: rgba(183,28,28,0.06);
+}
 .stock-icon { font-size: 1.4rem; }
 .stock-info { flex: 1; }
 .stock-info strong { font-size: 0.88rem; display: block; }
@@ -514,6 +545,26 @@ html, body {
   display: inline-block;
   background: rgba(229,57,53,0.2);
   color: #ef9a9a;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 3px;
+}
+.badge-oos {
+  display: inline-block;
+  background: rgba(183,28,28,0.3);
+  color: #ef9a9a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-top: 3px;
+  border: 1px solid rgba(229,57,53,0.4);
+}
+.badge-oos-disc {
+  display: inline-block;
+  background: rgba(183,28,28,0.15);
+  color: #ffcdd2;
   font-size: 0.7rem;
   padding: 2px 6px;
   border-radius: 4px;

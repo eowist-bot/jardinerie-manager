@@ -52,6 +52,12 @@ function typeOnShelf(sid, productId) {
   return G.sections[sid].stock.some(s => s.productId === productId && s.qty > 0);
 }
 
+// Produit saisonnier actuellement hors saison ?
+function isOutOfSeason(productId) {
+  const prod = productDef(productId);
+  return prod.seasonal !== null && !prod.seasonal.includes(season());
+}
+
 // Rayon saturé = la réserve n'est pas vide après le réapprovisionnement auto
 // Cela signifie qu'il n'y avait plus de slot libre pour les nouveaux types en réserve
 function isSaturated(sid) {
@@ -97,6 +103,7 @@ function initGame() {
 
 // ── Phase fournisseurs ───────────────────────────────────────
 function startSupplierPhase() {
+  applyWeeklyDecay();       // -1 unité/semaine sur les slots hors saison
   autoRestockFromReserve();
   generateSupplierOffers();
   G.cart = {};
@@ -305,6 +312,25 @@ function advanceWeek() {
     G.seasonIdx    = (G.seasonIdx + 1) % 4;
     addLog(`🌍 Nouvelle saison : ${season()} !`, 'season');
   }
+}
+
+// ── Déclin hebdomadaire des items hors saison ────────────────
+// Chaque slot contenant un produit saisonnier hors saison perd 1 unité/semaine.
+// Objectif : forcer le joueur à solder avant la fin de saison.
+function applyWeeklyDecay() {
+  ownedSections().forEach(sid => {
+    const sec = G.sections[sid];
+    sec.stock.forEach(item => {
+      if (!isOutOfSeason(item.productId)) return;
+      if (item.qty <= 0) return;
+      item.qty -= 1;
+      const prod = productDef(item.productId);
+      const discTxt = item.discount > 0 ? ` (remise ${Math.round(item.discount * 100)}% en cours)` : '';
+      addLog(`🍂 Invendu hors saison : 1× ${prod.name} détruit${discTxt}`, 'decay');
+    });
+    // Libérer les slots épuisés par le déclin
+    sec.stock = sec.stock.filter(i => i.qty > 0);
+  });
 }
 
 function checkEndOfSeasonWarnings() {
