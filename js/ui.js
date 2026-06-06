@@ -454,7 +454,7 @@ function renderAllocationModal(sid) {
       ? `<span class="alloc-promo-tag">🏷️ PROMO -${Math.round(r.promoRate*100)}% · marge renforcée</span>`
       : '';
 
-    const sellAmt = catalogSellPrice(prod.section ? prod.section : r.productId);
+    const sellAmt = catalogSellPrice(r.productId);
     const profitPerUnit = catalogSellPrice(r.productId) - r.buyPrice;
 
     return `
