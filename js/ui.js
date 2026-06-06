@@ -21,20 +21,25 @@ function renderHUD() {
   const phaseLabels = {
     supplier:   '🏪 Approvisionnement',
     allocation: '📤 Mise en rayon',
-    market:     '🌿 Gestion du magasin',
     results:    '📊 Résultats',
   };
   el('hud-phase').textContent = phaseLabels[G.phase] || '';
 
-  el('btn-supplier').style.display   = G.phase === 'supplier'   ? 'inline-flex' : 'none';
-  el('btn-end-week').style.display   = G.phase === 'market'     ? 'inline-flex' : 'none';
+  el('btn-supplier').style.display = G.phase === 'supplier' ? 'inline-flex' : 'none';
 
+  // Allocation : bouton change selon l'état de la réserve
   if (G.phase === 'allocation') {
-    const pending = ownedSections().reduce((a, sid) => a + G.sections[sid].reserve.reduce((b, r) => b + r.qty, 0), 0);
+    const pending = ownedSections().reduce((a, sid) =>
+      a + G.sections[sid].reserve.reduce((b, r) => b + r.qty, 0), 0);
     el('btn-allocation').style.display = 'inline-flex';
-    el('btn-allocation').innerHTML = pending > 0
-      ? `📤 Mise en rayon <span class="btn-alloc-count">${pending}</span>`
-      : `📤 Mise en rayon · <span style="font-size:0.75rem;opacity:0.75">tout placé</span>`;
+    if (pending === 0) {
+      el('btn-allocation').className     = 'btn-hud primary open-store-btn';
+      el('btn-allocation').innerHTML     = '🏪 Ouvrir le magasin';
+    } else {
+      el('btn-allocation').className = 'btn-hud secondary';
+      el('btn-allocation').innerHTML =
+        `📤 Mise en rayon <span class="btn-alloc-count">${pending}</span>`;
+    }
   } else {
     el('btn-allocation').style.display = 'none';
   }
@@ -49,53 +54,60 @@ function renderStoreMap() {
     const sec = G.sections[sid];
     const div = document.createElement('div');
     div.dataset.sid = sid;
+    div.style.gridArea = def.gridArea;
+
+    if (!sec.owned) {
+      div.className = 'section-tile locked';
+      div.style.setProperty('--sec-border', def.borderColor);
+      div.innerHTML = `
+        <div class="tile-locked-compact">
+          <span>${def.icon}</span>
+          <span class="lock-cost-compact">${fmt(def.unlockCost)}</span>
+        </div>`;
+      div.addEventListener('click', () => onSectionClick(sid));
+      map.appendChild(div);
+      return;
+    }
+
+    // Section owned
     div.style.setProperty('--sec-color',  def.color);
     div.style.setProperty('--sec-border', def.borderColor);
     div.style.setProperty('--sec-text',   def.textColor);
-    div.style.gridArea = def.gridArea;
 
-    if (sec.owned) {
-      const used       = occupiedSlots(sid);
-      const total      = sectionCapacity(sid);
-      const fillPct    = total > 0 ? Math.round(used / total * 100) : 0;
-      const nearEnd    = nearEndOfSeason() && hasSeasonalStock(sid);
-      const reserveQty = sec.reserve.reduce((a, r) => a + r.qty, 0);
-      const hasAlloc   = G.phase === 'allocation' && reserveQty > 0;
-      const isPromo    = G.phase === 'supplier' && G.promoSectionId === sid;
-      const canPlace   = hasAlloc && (sec.reserve.some(r => typeOnShelf(sid, r.productId) || freeSlots(sid) > 0));
+    const used       = occupiedSlots(sid);
+    const total      = sectionCapacity(sid);
+    const fillPct    = total > 0 ? Math.round(used / total * 100) : 0;
+    const nearEnd    = nearEndOfSeason() && hasSeasonalStock(sid);
+    const reserveQty = sec.reserve.reduce((a, r) => a + r.qty, 0);
+    const hasAlloc   = G.phase === 'allocation' && reserveQty > 0;
+    const isPromo    = G.phase === 'supplier' && G.promoSectionId === sid;
+    const canPlace   = hasAlloc && sec.reserve.some(r => typeOnShelf(sid, r.productId) || freeSlots(sid) > 0);
 
-      div.className = 'section-tile owned' + (hasAlloc ? ' needs-alloc' : '') + (canPlace ? ' can-place' : '');
+    div.className = 'section-tile owned'
+      + (hasAlloc ? ' needs-alloc' : '')
+      + (canPlace ? ' can-place' : '');
 
-      div.innerHTML = `
-        <div class="tile-header">
-          <span class="tile-icon">${def.icon}</span>
-          <span class="tile-name">${def.name}</span>
-          <span class="tile-slots">${used}/${total}</span>
-          ${isPromo ? '<span class="promo-tile-badge">🏷️ PROMO</span>' : ''}
-        </div>
-        <div class="shelf-bar-wrap">
-          <div class="shelf-bar" style="width:${fillPct}%"></div>
-        </div>
-        <div class="tile-stats">
-          ${hasAlloc ? `<span class="alloc-badge${canPlace ? ' actionable' : ' full'}">📦 ${reserveQty} à placer</span>` : (reserveQty > 0 ? `<span class="reserve-badge ${isSaturated(sid) ? 'saturated' : ''}">🏠 ${reserveQty}</span>` : '')}
-          ${nearEnd ? '<span class="warn-badge">⚠️ Fin saison</span>' : ''}
-        </div>
+    div.innerHTML = `
+      <div class="tile-header">
+        <span class="tile-icon">${def.icon}</span>
+        <span class="tile-name">${def.name}</span>
+        <span class="tile-slots">${used}/${total}</span>
+        ${isPromo ? '<span class="promo-tile-badge">🏷️ PROMO</span>' : ''}
+      </div>
+      <div class="shelf-bar-wrap">
+        <div class="shelf-bar" style="width:${fillPct}%"></div>
+      </div>
+      <div class="tile-stats">
         ${hasAlloc
-          ? `<div class="alloc-cta">Cliquez pour allouer →</div>`
-          : `<div class="shelf-mini">${renderMiniShelf(sid)}</div>`
-        }`;
-    } else {
-      div.innerHTML = `
-        <div class="tile-header">
-          <span class="tile-icon">${def.icon}</span>
-          <span class="tile-name">${def.name}</span>
-        </div>
-        <div class="tile-locked-info">
-          <span class="lock-icon">🔒</span>
-          <span class="lock-cost">${fmt(def.unlockCost)}</span>
-        </div>
-        <div class="tile-desc">${def.description}</div>`;
-    }
+          ? `<span class="alloc-badge${canPlace ? ' actionable' : ' full'}">📦 ${reserveQty} à placer</span>`
+          : (reserveQty > 0
+              ? `<span class="reserve-badge ${isSaturated(sid) ? 'saturated' : ''}">🏠 ${reserveQty}</span>`
+              : '')}
+        ${nearEnd ? '<span class="warn-badge">⚠️ Fin saison</span>' : ''}
+      </div>
+      ${hasAlloc
+        ? `<div class="alloc-cta">Cliquez pour allouer →</div>`
+        : `<div class="shelf-mini">${renderMiniShelf(sid)}</div>`}`;
 
     div.addEventListener('click', () => onSectionClick(sid));
     map.appendChild(div);
@@ -109,14 +121,14 @@ function renderMiniShelf(sid) {
 
   sec.stock.forEach(item => {
     if (shown >= totalSlots) return;
-    const prod       = productDef(item.productId);
-    const oos        = isOutOfSeason(item.productId);
-    const nearEnd    = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
-    const hasDisc    = item.discount > 0;
+    const prod    = productDef(item.productId);
+    const oos     = isOutOfSeason(item.productId);
+    const nearEnd = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
+    const hasDisc = item.discount > 0;
 
     let slotClass = '';
-    if (oos && !hasDisc)   slotClass = ' out-season';
-    else if (oos)          slotClass = ' out-season discounted';
+    if (oos && !hasDisc)  slotClass = ' out-season';
+    else if (oos)         slotClass = ' out-season discounted';
     else if (nearEnd && !hasDisc) slotClass = ' warn';
 
     const discBadge = hasDisc ? `<span class="mini-disc">-${Math.round(item.discount*100)}%</span>` : '';
@@ -199,20 +211,23 @@ function doUnlock(sid) {
 // ── Modal fournisseur ────────────────────────────────────────
 function openSupplierModal(sid) {
   if (isSaturated(sid)) {
-    const sec      = G.sections[sid];
-    const def      = sectionDef(sid);
-    const resTotal = sec.reserve.reduce((a, r) => a + r.qty, 0);
+    const sec  = G.sections[sid];
+    const def  = sectionDef(sid);
+    const qty  = sec.reserve.reduce((a, r) => a + r.qty, 0);
     showModal(`
       <h2>${def.icon} ${def.name} — Rayon saturé</h2>
       <div class="saturated-msg">
         <span class="sat-icon">🏠</span>
         <div>
-          <strong>${resTotal} article(s) en réserve — commande bloquée.</strong>
-          <p>Attendez que la réserve se vide avant de recomander.</p>
+          <strong>${qty} article(s) en réserve — commande bloquée.</strong>
+          <p>Attendez que la réserve se vide avant de recommander.</p>
         </div>
       </div>
       <h3>Réserve</h3>
-      ${sec.reserve.map(r => { const p = productDef(r.productId); return `<div class="reserve-row">${p.icon} <strong>${p.name}</strong> ×${r.qty}</div>`; }).join('')}
+      ${sec.reserve.map(r => {
+        const p = productDef(r.productId);
+        return `<div class="reserve-row">${p.icon} <strong>${p.name}</strong> ×${r.qty}</div>`;
+      }).join('')}
       <div class="modal-actions"><button class="btn-secondary" onclick="closeModal()">Fermer</button></div>
     `);
     return;
@@ -239,26 +254,35 @@ function renderSupplierModal(sid) {
     <div class="supplier-block">
       <div class="supplier-name">🚚 ${name}</div>
       ${items.map(({ productId, qty, unitPrice, originalPrice, promoRate, idx }) => {
-        const prod    = productDef(productId);
-        const inCart  = cart.find(c => c.productId === productId);
-        const sell    = sellPrice(productId);
-        const profit  = sell - unitPrice;
+        const prod      = productDef(productId);
+        const inCart    = cart.find(c => c.productId === productId);
+        const sellAmt   = catalogSellPrice(productId);
+        const margin    = Math.round((sellAmt / unitPrice - 1) * 100);
         const alreadyOn = typeOnShelf(sid, productId);
+        const shelfItem = sec.stock.find(s => s.productId === productId);
+        const resItem   = sec.reserve.find(r => r.productId === productId);
+
         const slotTag = alreadyOn
           ? '<span class="slot-tag existing">🔄 Réassort</span>'
           : (free > 0
               ? '<span class="slot-tag new-slot">➕ Nouveau slot</span>'
               : '<span class="slot-tag no-slot">📦 → Réserve</span>');
-        const seasonLabel = prod.seasonal
-          ? (prod.seasonal.includes(season()) ? '✅ En saison' : '❌ Hors saison')
-          : '🔄 Toute saison';
 
-        // Affichage prix promo
+        // Stock actuel affiché sous le nom
+        const stockInfo = [
+          shelfItem ? `<span class="stock-cur shelf-cur">🛍️ Rayon: ×${shelfItem.qty}</span>` : '',
+          resItem   ? `<span class="stock-cur reserve-cur">🏠 Réserve: ×${resItem.qty}</span>` : '',
+        ].filter(Boolean).join(' ');
+
+        // Prévision
+        const isHot  = G.weeklyForecast.hot.includes(productId);
+        const isCold = G.weeklyForecast.cold.includes(productId);
+        const forecastTag = isHot
+          ? '<span class="forecast-hot">🔥 Tendance haussse</span>'
+          : (isCold ? '<span class="forecast-cold">❄️ Tendance baisse</span>' : '');
+
         const priceHtml = promoRate > 0
-          ? `<span class="offer-buy promo">
-               Achat : <strong>${fmt(unitPrice)}</strong>/u
-               <s class="orig-price">${fmt(originalPrice)}</s>
-             </span>
+          ? `<span class="offer-buy promo">Achat : <strong>${fmt(unitPrice)}</strong>/u <s class="orig-price">${fmt(originalPrice)}</s></span>
              <span class="promo-rate-badge">-${Math.round(promoRate*100)}%</span>`
           : `<span class="offer-buy">Achat : ${fmt(unitPrice)}/u</span>`;
 
@@ -266,14 +290,16 @@ function renderSupplierModal(sid) {
           <div class="offer-row ${inCart ? 'in-cart' : ''} ${promoRate > 0 ? 'has-promo' : ''}">
             <span class="offer-icon">${prod.icon}</span>
             <div class="offer-info">
-              <strong>${prod.name}</strong>
-              <small>${seasonLabel} ${slotTag}</small>
+              <strong>${prod.name}</strong> ${forecastTag}
+              <small>${slotTag}</small>
+              ${stockInfo ? `<div class="offer-stock-cur">${stockInfo}</div>` : ''}
             </div>
             <div class="offer-nums">
               <span class="offer-qty">×${qty}</span>
               ${priceHtml}
-              <span class="offer-sell">Vente : ${fmt(sell)}/u <em class="profit-tag">+${fmt(profit)}</em></span>
-              <span class="offer-total">Total : ${fmt(qty * unitPrice)}</span>
+              <span class="offer-sell">Vente : <strong>${fmt(sellAmt)}</strong>/u
+                <em class="profit-tag">+${margin}% marge</em></span>
+              <span class="offer-total">Coût total : ${fmt(qty * unitPrice)}</span>
             </div>
             <button class="btn-add-cart ${inCart ? 'added' : ''}" onclick="toggleCartItem('${sid}', ${idx})">
               ${inCart ? '✓ Retiré' : '+ Commander'}
@@ -282,7 +308,7 @@ function renderSupplierModal(sid) {
       }).join('')}
     </div>`).join('');
 
-  const top3Html = renderTop3Widget(sid);
+  const forecastHtml = renderWeeklyForecastWidget();
 
   showModal(`
     <h2>${def.icon} ${def.name} — Commande fournisseur
@@ -292,7 +318,7 @@ function renderSupplierModal(sid) {
       <span>Slots : <strong>${used}/${total}</strong> (${free} libre${free !== 1 ? 's' : ''})</span>
       <span>Caisse : ${fmt(G.money)}</span>
     </div>
-    ${top3Html}
+    ${forecastHtml}
     <div class="suppliers-list">${suppliersHtml}</div>
     <div class="cart-summary">
       <strong>🛒 Panier : ${cart.length} ligne(s) — ${fmt(cartTotal)}</strong>
@@ -316,72 +342,140 @@ function toggleCartItem(sid, offerIdx) {
   renderSupplierModal(sid);
 }
 
-// ── Modal allocation ─────────────────────────────────────────
-function openAllocationModal(sid) {
-  renderAllocationModal(sid);
+// ── Widget tendance de la semaine ────────────────────────────
+function renderWeeklyForecastWidget() {
+  const { hot, cold } = G.weeklyForecast;
+  if (hot.length === 0 && cold.length === 0) return '';
+
+  // Ventes semaine précédente
+  const lastWeekLine = (pid) => {
+    const last = getLastWeekSales(pid);
+    if (!last) return '';
+    const profit = last.revenue - last.qty * (G.salesHistory.length > 0
+      ? (G.salesHistory[G.salesHistory.length-1].items.find(i=>i.productId===pid)?.buyPrice || 0)
+      : 0);
+    return `<span class="fw-last-week">Sem. préc. : ×${last.qty} · ${fmt(last.revenue)} CA · +${fmt(Math.max(0,profit))} bén.</span>`;
+  };
+
+  const hotRows = hot.map(pid => {
+    const prod = productDef(pid);
+    return `<div class="fw-row fw-hot">
+      <span class="fw-icon">🔥</span>
+      <div class="fw-info">
+        <strong>${prod.icon} ${prod.name}</strong>
+        ${lastWeekLine(pid)}
+      </div>
+      <span class="fw-badge hot">Hausse probable</span>
+    </div>`;
+  }).join('');
+
+  const coldRows = cold.map(pid => {
+    const prod = productDef(pid);
+    return `<div class="fw-row fw-cold">
+      <span class="fw-icon">❄️</span>
+      <div class="fw-info">
+        <strong>${prod.icon} ${prod.name}</strong>
+        ${lastWeekLine(pid)}
+      </div>
+      <span class="fw-badge cold">Baisse probable</span>
+    </div>`;
+  }).join('');
+
+  return `<div class="forecast-widget">
+    <div class="forecast-title">📈 Tendance de la semaine <span class="forecast-note">(prévisions marché)</span></div>
+    <div class="forecast-grid">
+      <div class="forecast-col">
+        <div class="forecast-col-title">🔥 Devrait bien se vendre</div>
+        ${hotRows || '<div class="fw-empty">—</div>'}
+      </div>
+      <div class="forecast-col">
+        <div class="forecast-col-title">❄️ Devrait moins se vendre</div>
+        ${coldRows || '<div class="fw-empty">—</div>'}
+      </div>
+    </div>
+  </div>`;
 }
 
+// ── Modal allocation ─────────────────────────────────────────
+function openAllocationModal(sid) { renderAllocationModal(sid); }
+
 function renderAllocationModal(sid) {
-  const def      = sectionDef(sid);
-  const sec      = G.sections[sid];
-  const used     = occupiedSlots(sid);
-  const total    = sectionCapacity(sid);
-  const free     = freeSlots(sid);
+  const def        = sectionDef(sid);
+  const sec        = G.sections[sid];
+  const used       = occupiedSlots(sid);
+  const total      = sectionCapacity(sid);
+  const free       = freeSlots(sid);
   const reserveQty = sec.reserve.reduce((a, r) => a + r.qty, 0);
+  const canBuySlot = total < MAX_SLOTS && G.money >= nextSlotCost(sid);
 
   if (sec.reserve.length === 0) {
     showModal(`
       <h2>${def.icon} ${def.name} — Mise en rayon</h2>
       <div class="alloc-done-banner">✅ Tout est en rayon !</div>
-      ${sec.stock.length > 0 ? `<div class="alloc-shelf">${sec.stock.map(i => { const p = productDef(i.productId); return `<div class="alloc-shelf-row">${p.icon} ${p.name} <span class="qty-chip">×${i.qty}</span></div>`; }).join('')}</div>` : ''}
+      ${renderShelfPreview(sid)}
+      ${renderShelfDiscounts(sid)}
+      ${renderSlotBuySection(sid)}
       <div class="modal-actions">
-        <button class="btn-primary" onclick="closeModal()">← Retour à la carte</button>
+        <button class="btn-primary" onclick="closeModal()">← Retour</button>
       </div>
     `);
     return;
   }
 
-  // Bouton "tout mettre en rayon" si au moins un article peut aller en rayon
-  const canPlaceAll = sec.reserve.some(r => typeOnShelf(sid, r.productId) || freeSlots(sid) > 0);
+  // Réserve triée : promos en premier, puis OOS, puis normal
+  const sorted = [...sec.reserve].sort((a, b) => {
+    const aScore = (a.promoRate > 0 ? 100 : 0) + (isOutOfSeason(a.productId) ? -10 : 0);
+    const bScore = (b.promoRate > 0 ? 100 : 0) + (isOutOfSeason(b.productId) ? -10 : 0);
+    return bScore - aScore;
+  });
 
-  const reserveRows = sec.reserve.map(r => {
+  // Nb d'articles qui nécessitent un nouveau slot
+  const needNewSlot = sorted.filter(r => !typeOnShelf(sid, r.productId)).length;
+  const canPlaceAll = reserveQty > 0 && (
+    sorted.every(r => typeOnShelf(sid, r.productId)) || free >= needNewSlot
+  );
+
+  const reserveRows = sorted.map(r => {
     const prod      = productDef(r.productId);
     const oos       = isOutOfSeason(r.productId);
     const alreadyOn = typeOnShelf(sid, r.productId);
-    // recalcul free à chaque ligne car ça change à chaque moveToShelf
     const freeDyn   = freeSlots(sid);
     const canMove   = alreadyOn || freeDyn > 0;
-    const slotInfo  = alreadyOn
+    const isPromo   = r.promoRate > 0;
+
+    const slotInfo = alreadyOn
       ? '<span class="slot-tag existing">🔄 Réassort — même slot</span>'
       : (freeDyn > 0
-          ? `<span class="slot-tag new-slot">➕ 1 slot libre utilisé (${freeDyn} dispo)</span>`
+          ? `<span class="slot-tag new-slot">➕ 1 slot libre (${freeDyn} dispo)</span>`
           : '<span class="slot-tag no-slot">⚠️ Plus de slot libre</span>');
-    const oosTag = oos ? `<span class="badge-oos">🍂 Hors saison</span>` : '';
+
+    const oosTag  = oos   ? `<span class="badge-oos">🍂 Hors saison</span>` : '';
+    const promoTag = isPromo
+      ? `<span class="alloc-promo-tag">🏷️ PROMO -${Math.round(r.promoRate*100)}% · marge renforcée</span>`
+      : '';
+
+    const sellAmt = catalogSellPrice(prod.section ? prod.section : r.productId);
+    const profitPerUnit = catalogSellPrice(r.productId) - r.buyPrice;
 
     return `
-      <div class="alloc-row ${oos ? 'out-season' : ''} ${canMove ? '' : 'blocked'}">
+      <div class="alloc-row ${oos ? 'out-season' : ''} ${isPromo ? 'is-promo' : ''} ${canMove ? '' : 'blocked'}">
         <div class="alloc-row-left">
           <span class="stock-icon">${prod.icon}</span>
           <div class="stock-info">
             <strong>${prod.name}</strong>
-            <small>×${r.qty} · achat ${fmt(r.buyPrice)}/u · vente ${fmt(sellPrice(r.productId))}/u</small>
+            ${promoTag}
+            <small>×${r.qty} · achat <strong>${fmt(r.buyPrice)}/u</strong> → vente ${fmt(catalogSellPrice(r.productId))}/u
+              · bén. <strong class="${profitPerUnit > 0 ? 'profit-pos' : 'profit-neg'}">${fmt(profitPerUnit)}/u</strong>
+            </small>
             <div class="alloc-tags">${slotInfo}${oosTag}</div>
           </div>
         </div>
         <button class="btn-alloc-place ${canMove ? '' : 'disabled'}"
           onclick="${canMove ? `doMoveToShelf('${sid}', '${r.productId}')` : ''}">
-          ${canMove ? '📤 Mettre en rayon' : '⛔ Slot plein'}
+          ${canMove ? '📤 En rayon' : '⛔ Slot plein'}
         </button>
       </div>`;
   }).join('');
-
-  // Aperçu du rayon actuel
-  const shelfPreview = sec.stock.length === 0
-    ? `<p class="empty-stock" style="padding:6px 0">Rayon vide pour l'instant.</p>`
-    : sec.stock.map(i => {
-        const p = productDef(i.productId);
-        return `<div class="alloc-shelf-row">${p.icon} ${p.name} <span class="qty-chip">×${i.qty}</span></div>`;
-      }).join('');
 
   showModal(`
     <div class="alloc-modal-header">
@@ -389,9 +483,8 @@ function renderAllocationModal(sid) {
         <h2>${def.icon} ${def.name} — Mise en rayon</h2>
         <div class="alloc-slot-bar">
           ${Array.from({length: total}, (_, i) =>
-            `<div class="slot-pip ${i < used ? 'used' : 'free'}"></div>`
-          ).join('')}
-          <span class="alloc-slot-label">${used}/${total} slots occupés · ${free} libre${free !== 1 ? 's' : ''}</span>
+            `<div class="slot-pip ${i < used ? 'used' : 'free'}"></div>`).join('')}
+          <span class="alloc-slot-label">${used}/${total} · ${free} libre${free !== 1 ? 's' : ''}</span>
         </div>
       </div>
       <div class="alloc-reserve-count">
@@ -400,16 +493,18 @@ function renderAllocationModal(sid) {
       </div>
     </div>
 
-    ${canPlaceAll ? `
-    <button class="btn-alloc-all" onclick="doMoveAllToShelf('${sid}')">
-      📤 Tout mettre en rayon
-    </button>` : ''}
+    ${canPlaceAll
+      ? `<button class="btn-alloc-all" onclick="doMoveAllToShelf('${sid}')">📤 Tout mettre en rayon</button>`
+      : `<div class="alloc-noplaceall">⚠️ Slots insuffisants pour tout placer — placez manuellement ou achetez un slot.</div>`}
 
     <div class="alloc-list">${reserveRows}</div>
 
+    ${renderShelfDiscounts(sid)}
+    ${renderSlotBuySection(sid)}
+
     <details class="alloc-shelf-details">
       <summary>🛍️ Déjà en rayon (${sec.stock.length} type${sec.stock.length !== 1 ? 's' : ''})</summary>
-      <div class="alloc-shelf">${shelfPreview}</div>
+      ${renderShelfPreview(sid)}
     </details>
 
     <div class="modal-actions">
@@ -418,28 +513,97 @@ function renderAllocationModal(sid) {
   `);
 }
 
+function renderShelfPreview(sid) {
+  const sec = G.sections[sid];
+  if (sec.stock.length === 0) return `<p class="empty-stock" style="padding:6px 0">Rayon vide pour l'instant.</p>`;
+  return `<div class="alloc-shelf">${sec.stock.map(i => {
+    const p = productDef(i.productId);
+    return `<div class="alloc-shelf-row">${p.icon} ${p.name} <span class="qty-chip">×${i.qty}</span></div>`;
+  }).join('')}</div>`;
+}
+
+// Sliders de remise pour les articles déjà en rayon
+function renderShelfDiscounts(sid) {
+  const sec = G.sections[sid];
+  if (sec.stock.length === 0) return '';
+  const rows = sec.stock.map(item => {
+    const prod    = productDef(item.productId);
+    const oos     = isOutOfSeason(item.productId);
+    const discPct = Math.round(item.discount * 100);
+    const sellAmt = sellPrice(item.productId, item.discount);
+    return `<div class="discount-row ${oos ? 'oos-row' : ''}">
+      <span>${prod.icon} <strong>${prod.name}</strong>
+        ${oos ? '<span class="badge-oos" style="font-size:0.65rem">🍂</span>' : ''}
+      </span>
+      <span class="disc-sell-preview">Vente : ${fmt(sellAmt)}</span>
+      <div class="discount-ctrl">
+        <label>Remise : <strong id="dlbl-${item.id}">${discPct}%</strong></label>
+        <input type="range" min="0" max="50" step="5" value="${discPct}"
+          oninput="previewDiscountAlloc(this, '${item.id}')"
+          onchange="applyDiscountAlloc('${sid}', ${item.id}, this.value)">
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="shelf-discounts">
+    <div class="shelf-discounts-title">🏷️ Remises sur le rayon</div>
+    ${rows}
+  </div>`;
+}
+
+function renderSlotBuySection(sid) {
+  const sec  = G.sections[sid];
+  const total = sectionCapacity(sid);
+  if (total >= MAX_SLOTS) return '';
+  const cost     = nextSlotCost(sid);
+  const canBuy   = G.money >= cost;
+  return `<div class="slot-buy-section">
+    <button class="btn-upgrade ${canBuy ? '' : 'disabled'}" onclick="${canBuy ? `doBuySlotAlloc('${sid}')` : ''}">
+      📐 Acheter un slot — ${fmt(cost)} (${total + 1}/${MAX_SLOTS})
+    </button>
+  </div>`;
+}
+
+function previewDiscountAlloc(input, itemId) {
+  const lbl = document.getElementById(`dlbl-${itemId}`);
+  if (lbl) lbl.textContent = `${input.value}%`;
+}
+
+function applyDiscountAlloc(sid, itemId, value) {
+  setDiscount(sid, itemId, parseInt(value) / 100);
+  renderAllocationModal(sid);
+  renderStoreMap();
+}
+
+function doBuySlotAlloc(sid) {
+  const res = buySlot(sid);
+  if (!res.ok) { showToast(res.error, 'error'); return; }
+  renderAllocationModal(sid);
+  renderStoreMap();
+  renderHUD();
+}
+
 function doMoveToShelf(sid, productId) {
   const res = moveToShelf(sid, productId);
   if (!res.ok) { showToast(res.error, 'error'); return; }
   renderAllocationModal(sid);
   renderStoreMap();
+  renderHUD();
 }
 
 function doMoveAllToShelf(sid) {
-  const sec = G.sections[sid];
-  // copie car on modifie la réserve pendant l'itération
-  const toPlace = [...sec.reserve].map(r => r.productId);
+  const toPlace = [...G.sections[sid].reserve].map(r => r.productId);
   let placed = 0;
   toPlace.forEach(pid => {
     const res = moveToShelf(sid, pid);
     if (res.ok) placed++;
   });
-  if (placed === 0) showToast('Aucun article placé (slots pleins)', 'error');
+  if (placed === 0) showToast('Aucun article placé (slots insuffisants)', 'error');
   renderAllocationModal(sid);
   renderStoreMap();
+  renderHUD();
 }
 
-// ── Modal stock (phase marché) ───────────────────────────────
+// ── Modal stock (phases autres) ──────────────────────────────
 function openStockModal(sid) { renderStockModal(sid); }
 
 function renderStockModal(sid) {
@@ -474,7 +638,7 @@ function renderStockModal(sid) {
         let rowClass = '', badge = '';
         if (oos && item.discount === 0) {
           rowClass = 'oos-row';
-          badge = `<span class="badge-oos">🍂 Hors saison — perd 1 unité/semaine</span>`;
+          badge = `<span class="badge-oos">🍂 Hors saison — perd 1/semaine</span>`;
         } else if (oos) {
           rowClass = 'oos-row discounted';
           badge = `<span class="badge-oos-disc">🏷️ En solde hors saison</span>`;
@@ -503,22 +667,19 @@ function renderStockModal(sid) {
   const reserveSection = sec.reserve.length === 0
     ? `<div class="reserve-section empty-reserve"><div class="reserve-header">🏠 Réserve</div><p class="empty-stock">Vide.</p></div>`
     : `<div class="reserve-section">
-        <div class="reserve-header">🏠 Réserve — ${reserveQty} article(s)
-          <span class="reserve-note">Réassort auto en début de semaine</span>
-        </div>
+        <div class="reserve-header">🏠 Réserve — ${reserveQty} article(s)</div>
         ${sec.reserve.map(r => {
           const prod = productDef(r.productId);
           const oos  = isOutOfSeason(r.productId);
           const on   = typeOnShelf(sid, r.productId);
-          const tag  = on
-            ? '<span class="slot-tag existing">🔄 Réassort</span>'
-            : (free > 0 ? '<span class="slot-tag new-slot">➕ Slot libre</span>' : '<span class="slot-tag no-slot">⏳ Attente</span>');
+          const tag  = on ? '<span class="slot-tag existing">🔄</span>'
+            : (free > 0 ? '<span class="slot-tag new-slot">➕</span>' : '<span class="slot-tag no-slot">⏳</span>');
           return `<div class="reserve-row-detail ${oos ? 'out-season' : ''}">
             <span class="stock-icon">${prod.icon}</span>
             <div class="stock-info">
               <strong>${prod.name}</strong>
-              <small>×${r.qty} · achat ${fmt(r.buyPrice)}/u · vente ${fmt(sellPrice(r.productId))}/u</small>
-              ${tag}${oos ? '<span class="badge-oos" style="font-size:0.65rem">🍂 Hors saison</span>' : ''}
+              <small>×${r.qty} · ${fmt(r.buyPrice)}/u · vente ${fmt(catalogSellPrice(r.productId))}/u</small>
+              ${tag}${oos ? '<span class="badge-oos" style="font-size:0.65rem;margin-left:4px">🍂</span>' : ''}
             </div>
           </div>`;
         }).join('')}
@@ -575,40 +736,6 @@ function doBuySlot(sid) {
   renderLog();
 }
 
-// ── Widget Top 3 ventes ──────────────────────────────────────
-function renderTop3Widget(filterSectionId = null) {
-  if (G.salesHistory.length === 0) return '';
-  const top = getTopSales(3, 4);
-  if (top.length === 0) return '';
-
-  const trendIcon = (productId) => {
-    const t = getSalesTrend(productId);
-    return { up:'↑', stable:'→', down:'↓', new:'🆕', declining:'⚠️', absent:'·' }[t] || '·';
-  };
-  const trendClass = (productId) => {
-    const t = getSalesTrend(productId);
-    return { up:'trend-up', stable:'trend-stable', down:'trend-down', new:'trend-new', declining:'trend-declining' }[t] || '';
-  };
-
-  const rows = top.map((s, i) => {
-    const prod = productDef(s.productId);
-    const icon = trendIcon(s.productId);
-    const cls  = trendClass(s.productId);
-    return `<div class="top3-row">
-      <span class="top3-rank">${i + 1}</span>
-      <span class="top3-icon">${prod.icon}</span>
-      <span class="top3-name">${prod.name}</span>
-      <span class="top3-revenue">${fmt(s.revenue)}</span>
-      <span class="top3-trend ${cls}">${icon}</span>
-    </div>`;
-  }).join('');
-
-  return `<div class="top3-widget">
-    <div class="top3-title">🏆 Top ventes (4 sem.)</div>
-    ${rows}
-  </div>`;
-}
-
 // ── Validation approvisionnement ─────────────────────────────
 function doValidatePurchases() {
   const res = validatePurchases();
@@ -617,22 +744,25 @@ function doValidatePurchases() {
   showToast('Commandes validées ! Mettez vos articles en rayon.', 'success');
 }
 
-// ── Fin de semaine ────────────────────────────────────────────
-function doEndWeek() {
+// ── Ouvrir le magasin = fin de semaine ────────────────────────
+function doOpenStore() {
+  confirmAllocation();
   showResultsModal(endWeek());
   renderAll();
 }
 
 function showResultsModal(results) {
-  let totalRevenue = 0;
+  let totalRevenue = 0, totalProfit = 0;
   const rows = results.map(({ sectionId, items }) => {
     const rev = items.reduce((a, r) => a + r.revenue, 0);
+    const pft = items.reduce((a, r) => a + r.profit,  0);
     totalRevenue += rev;
+    totalProfit  += pft;
     const def = sectionDef(sectionId);
     if (!items.length) return `<div class="result-section"><div class="result-section-header">${def.icon} ${def.name} — <em>Aucune vente</em></div></div>`;
     return `
       <div class="result-section">
-        <div class="result-section-header">${def.icon} ${def.name} — <strong>${fmt(rev)}</strong></div>
+        <div class="result-section-header">${def.icon} ${def.name} — CA <strong>${fmt(rev)}</strong> · Bén. <strong class="profit-pos">${fmt(pft)}</strong></div>
         ${items.map(r => {
           const prod = productDef(r.productId);
           const disc = r.wasDiscounted ? ` <span class="disc-label">-${Math.round(r.discount*100)}%</span>` : '';
@@ -641,12 +771,13 @@ function showResultsModal(results) {
       </div>`;
   }).join('');
 
-  const top3Html = renderTop3Widget();
-
   showModal(`
     <h2>📊 Résultats — Semaine ${G.week - 1}</h2>
-    <div class="results-total">CA total : <strong>${fmt(totalRevenue)}</strong> · Caisse : <strong>${fmt(G.money)}</strong></div>
-    ${top3Html}
+    <div class="results-total">
+      CA : <strong>${fmt(totalRevenue)}</strong>
+      · Bénéfice : <strong class="profit-pos">${fmt(totalProfit)}</strong>
+      · Caisse : <strong>${fmt(G.money)}</strong>
+    </div>
     <div class="results-list">${rows}</div>
     <div class="modal-actions">
       <button class="btn-primary" onclick="startNextWeek()">▶ Semaine suivante</button>
@@ -681,17 +812,19 @@ function openReserveModal() {
           <span class="reserve-note">${u}/${t} slots · ${f} libre${f !== 1 ? 's' : ''}</span>
         </div>
         ${sec.reserve.map(r => {
-          const prod = productDef(r.productId);
-          const oos  = isOutOfSeason(r.productId);
-          const on   = typeOnShelf(sid, r.productId);
-          const tag  = on ? '<span class="slot-tag existing">🔄</span>'
+          const prod  = productDef(r.productId);
+          const oos   = isOutOfSeason(r.productId);
+          const on    = typeOnShelf(sid, r.productId);
+          const tag   = on ? '<span class="slot-tag existing">🔄</span>'
             : (f > 0 ? '<span class="slot-tag new-slot">➕</span>' : '<span class="slot-tag no-slot">⏳</span>');
+          const promo = r.promoRate > 0
+            ? `<span class="promo-rate-badge" style="font-size:0.6rem">-${Math.round(r.promoRate*100)}%</span>` : '';
           return `<div class="reserve-row-detail ${oos ? 'out-season' : ''}">
             <span class="stock-icon">${prod.icon}</span>
             <div class="stock-info">
-              <strong>${prod.name}</strong>
-              <small>×${r.qty} · ${fmt(r.buyPrice)}/u · vente ${fmt(sellPrice(r.productId))}/u</small>
-              ${tag}${oos ? '<span class="badge-oos" style="font-size:0.65rem;margin-left:4px">🍂 Hors saison</span>' : ''}
+              <strong>${prod.name}</strong>${promo}
+              <small>×${r.qty} · ${fmt(r.buyPrice)}/u · vente ${fmt(catalogSellPrice(r.productId))}/u</small>
+              ${tag}${oos ? '<span class="badge-oos" style="font-size:0.65rem;margin-left:4px">🍂</span>' : ''}
             </div>
           </div>`;
         }).join('')}
@@ -700,7 +833,6 @@ function openReserveModal() {
 
   showModal(`
     <h2>📦 Réserve globale — ${total} article(s)</h2>
-    <p style="font-size:0.82rem;color:var(--text-dim);margin-bottom:14px">Réassort automatique au début de chaque semaine.</p>
     ${html}
     <div class="modal-actions"><button class="btn-secondary" onclick="closeModal()">Fermer</button></div>
   `);
@@ -715,9 +847,9 @@ function openSupplierPanel() {
     const tot  = cart.reduce((a, c) => a + c.qty * c.unitPrice, 0);
     const sat  = isSaturated(sid);
     let statusText, rowClass;
-    if (sat)           { rowClass = 'saturated'; statusText = '<em>🏠 Réserve pleine</em>'; }
-    else if (cart.length > 0) { rowClass = 'has-items';  statusText = `${cart.length} ligne(s) — ${fmt(tot)}`; }
-    else               { rowClass = 'empty';     statusText = '<em>⚠️ Aucune commande</em>'; }
+    if (sat)                { rowClass = 'saturated'; statusText = '<em>🏠 Réserve pleine</em>'; }
+    else if (cart.length > 0) { rowClass = 'has-items'; statusText = `${cart.length} ligne(s) — ${fmt(tot)}`; }
+    else                    { rowClass = 'empty';     statusText = '<em>⚠️ Aucune commande</em>'; }
     const hasPromo = cart.some(c => c.promoRate > 0);
     return `
       <div class="supplier-summary-row ${rowClass}">
@@ -727,12 +859,11 @@ function openSupplierPanel() {
       </div>`;
   }).join('');
 
-  const allOrdered = owned.every(sid => isSaturated(sid) || (G.cart[sid] || []).length > 0);
-  const grandTotal = owned.reduce((a, sid) => a + (G.cart[sid] || []).reduce((b, c) => b + c.qty * c.unitPrice, 0), 0);
+  const allOrdered  = owned.every(sid => isSaturated(sid) || (G.cart[sid] || []).length > 0);
+  const grandTotal  = owned.reduce((a, sid) => a + (G.cart[sid] || []).reduce((b, c) => b + c.qty * c.unitPrice, 0), 0);
 
   showModal(`
     <h2>🏪 Récapitulatif des commandes</h2>
-    ${renderTop3Widget()}
     <div class="supplier-summary">${cartStatus}</div>
     <p class="grand-total">Total : <strong>${fmt(grandTotal)}</strong> · Caisse : <strong>${fmt(G.money)}</strong></p>
     <div class="modal-actions">
@@ -741,6 +872,68 @@ function openSupplierPanel() {
         ✅ Valider (→ tout part en réserve)
       </button>
       <button class="btn-secondary" onclick="closeModal()">Fermer</button>
+    </div>
+  `);
+}
+
+// ── Vue globale allocation ────────────────────────────────────
+function openAllocationOverview() {
+  const pending = ownedSections().reduce((a, sid) =>
+    a + G.sections[sid].reserve.reduce((b, r) => b + r.qty, 0), 0);
+
+  // Plus rien en réserve → ouvrir directement le magasin
+  if (pending === 0) {
+    doOpenStore();
+    return;
+  }
+
+  const owned = ownedSections();
+  const withReserve    = owned.filter(sid => G.sections[sid].reserve.length > 0);
+  const withoutReserve = owned.filter(sid => G.sections[sid].reserve.length === 0);
+
+  const pendingRows = withReserve.map(sid => {
+    const def    = sectionDef(sid);
+    const sec    = G.sections[sid];
+    const qty    = sec.reserve.reduce((a, r) => a + r.qty, 0);
+    const free   = freeSlots(sid);
+    const canAny = sec.reserve.some(r => typeOnShelf(sid, r.productId) || free > 0);
+    const hasPromo = sec.reserve.some(r => r.promoRate > 0);
+    return `
+      <div class="alloc-overview-row ${canAny ? '' : 'blocked'}">
+        <span class="alloc-ov-icon">${def.icon}</span>
+        <div class="alloc-ov-info">
+          <strong>${def.name}${hasPromo ? ' <span class="promo-rate-badge" style="font-size:0.6rem">PROMO</span>' : ''}</strong>
+          <small>${qty} article${qty>1?'s':''} en réserve · ${free} slot${free!==1?'s':''} libre${free!==1?'s':''}</small>
+        </div>
+        <button class="btn-alloc-go ${canAny ? '' : 'disabled'}"
+          onclick="${canAny ? `closeModal(); openAllocationModal('${sid}')` : ''}">
+          ${canAny ? '📤 Allouer →' : '🔒 Complet'}
+        </button>
+      </div>`;
+  }).join('');
+
+  const doneRows = withoutReserve.map(sid => {
+    const def = sectionDef(sid);
+    return `<div class="alloc-overview-row done"><span>${def.icon} ${def.name}</span><span class="alloc-done-check">✅</span></div>`;
+  }).join('');
+
+  showModal(`
+    <h2>📤 Mise en rayon</h2>
+    <p class="modal-desc">Choisissez ce que vous exposez. Ce qui reste en réserve sera réassorti automatiquement la semaine prochaine.</p>
+    <div class="alloc-progress-banner">
+      <strong>${pending} article${pending>1?'s':''}</strong> en attente dans ${withReserve.length} rayon${withReserve.length>1?'s':''}
+    </div>
+    <div class="alloc-overview-list">${pendingRows}</div>
+    ${withoutReserve.length > 0 ? `
+    <details>
+      <summary style="font-size:0.82rem;color:var(--text-dim);cursor:pointer;margin:10px 0">
+        ✅ Rayons sans réserve (${withoutReserve.length})
+      </summary>
+      <div class="alloc-overview-done">${doneRows}</div>
+    </details>` : ''}
+    <div class="modal-actions" style="margin-top:20px;border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn-secondary" onclick="closeModal()">← Continuer à allouer</button>
+      <button class="btn-open-store" onclick="closeModal(); doOpenStore()">🏪 Ouvrir le magasin quand même</button>
     </div>
   `);
 }
@@ -766,74 +959,10 @@ function showToast(msg, type = 'info') {
 }
 
 function bindGlobalEvents() {
-  el('btn-end-week').addEventListener('click', doEndWeek);
   el('btn-supplier').addEventListener('click', openSupplierPanel);
   el('btn-allocation').addEventListener('click', openAllocationOverview);
   el('btn-reserve').addEventListener('click', openReserveModal);
   el('modal-overlay').addEventListener('click', e => {
     if (e.target === el('modal-overlay')) closeModal();
   });
-}
-
-// ── Vue globale allocation ────────────────────────────────────
-function openAllocationOverview() {
-  const owned = ownedSections();
-  const withReserve    = owned.filter(sid => G.sections[sid].reserve.length > 0);
-  const withoutReserve = owned.filter(sid => G.sections[sid].reserve.length === 0);
-  const totalPending   = withReserve.reduce((a, sid) => a + G.sections[sid].reserve.reduce((b, r) => b + r.qty, 0), 0);
-
-  const pendingRows = withReserve.map(sid => {
-    const def    = sectionDef(sid);
-    const sec    = G.sections[sid];
-    const qty    = sec.reserve.reduce((a, r) => a + r.qty, 0);
-    const free   = freeSlots(sid);
-    const canAny = sec.reserve.some(r => typeOnShelf(sid, r.productId) || free > 0);
-    return `
-      <div class="alloc-overview-row ${canAny ? '' : 'blocked'}">
-        <span class="alloc-ov-icon">${def.icon}</span>
-        <div class="alloc-ov-info">
-          <strong>${def.name}</strong>
-          <small>${qty} article${qty>1?'s':''} en réserve · ${free} slot${free!==1?'s':''} libre${free!==1?'s':''}</small>
-        </div>
-        <button class="btn-alloc-go ${canAny ? '' : 'disabled'}"
-          onclick="${canAny ? `closeModal(); openAllocationModal('${sid}')` : ''}">
-          ${canAny ? '📤 Allouer →' : '🔒 Complet'}
-        </button>
-      </div>`;
-  }).join('');
-
-  const doneRows = withoutReserve.map(sid => {
-    const def = sectionDef(sid);
-    return `<div class="alloc-overview-row done"><span>${def.icon} ${def.name}</span><span class="alloc-done-check">✅</span></div>`;
-  }).join('');
-
-  showModal(`
-    <h2>📤 Mise en rayon</h2>
-    <p class="modal-desc">Cliquez sur chaque rayon pour choisir ce que vous exposez. Ce qui reste en réserve sera réassorti automatiquement la semaine prochaine.</p>
-
-    ${totalPending > 0 ? `
-    <div class="alloc-progress-banner">
-      <strong>${totalPending} article${totalPending>1?'s':''}</strong> en attente dans ${withReserve.length} rayon${withReserve.length>1?'s':''}
-    </div>
-    <div class="alloc-overview-list">${pendingRows}</div>` : ''}
-
-    ${withoutReserve.length > 0 ? `
-    <details ${withReserve.length === 0 ? 'open' : ''}>
-      <summary style="font-size:0.82rem;color:var(--text-dim);cursor:pointer;margin:10px 0">
-        ✅ Rayons sans réserve (${withoutReserve.length})
-      </summary>
-      <div class="alloc-overview-done">${doneRows}</div>
-    </details>` : ''}
-
-    <div class="modal-actions" style="margin-top:20px;border-top:1px solid var(--border);padding-top:14px">
-      <button class="btn-secondary" onclick="closeModal()">← Continuer à allouer</button>
-      <button class="btn-open-store" onclick="closeModal(); doConfirmAllocation()">🏪 Ouvrir le magasin</button>
-    </div>
-  `);
-}
-
-function doConfirmAllocation() {
-  confirmAllocation();
-  renderAll();
-  showToast('Magasin ouvert ! Gérez vos promotions.', 'success');
 }

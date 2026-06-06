@@ -2,7 +2,7 @@
 //  ENGINE — État du jeu & logique métier
 // ═══════════════════════════════════════════════════════════════
 
-const SELL_PRICE_MULT = 1.5;
+const SELL_PRICE_MULT = 1.5;   // prix vente = prix catalogue × 1,5 (toujours)
 const MIN_SELL_RATE   = 0.08;
 const BASE_SELL_RATE  = 0.35;
 const SEASON_END_WARN = 10;
@@ -13,18 +13,19 @@ const G = {
   seasonIdx:    0,
   weekInSeason: 1,
   money:        5000,
-  // phases : 'supplier' → 'allocation' → 'market' → 'results'
+  // phases : 'supplier' → 'allocation' → (ouvrir = endWeek) → 'results'
   phase:        'supplier',
 
-  sections:       {},
-  supplierOffers: {},
-  cart:           {},
+  sections:        {},
+  supplierOffers:  {},
+  cart:            {},
 
-  weeklyResults: null,
-  salesHistory:  [],   // [{week, seasonIdx, items:[{productId,sectionId,qty,revenue}]}]
-  promoSectionId: null, // rayon avec promo ce tour
+  weeklyResults:   null,
+  salesHistory:    [],   // [{week, seasonIdx, items:[{productId,sectionId,qty,revenue}]}]
+  promoSectionId:  null, // rayon avec promo ce tour
+  weeklyForecast:  { hot: [], cold: [] }, // 2 tops + 2 flops prévus pour la semaine
 
-  log:       [],
+  log:        [],
   nextItemId: 1,
 };
 
@@ -53,9 +54,14 @@ function isOutOfSeason(productId) {
 }
 
 // Prix de vente = prix CATALOGUE × 1,5 (indépendant du prix d'achat)
-// → le joueur bénéficie des promos fournisseur sans changer son prix de vente
+// → les promos fournisseur augmentent la marge sans changer le prix de vente
 function sellPrice(productId, discount = 0) {
   return productDef(productId).price * SELL_PRICE_MULT * (1 - discount);
+}
+
+// Prix de vente catalogue (sans discount) — pour affichage
+function catalogSellPrice(productId) {
+  return productDef(productId).price * SELL_PRICE_MULT;
 }
 
 function addLog(msg, type = 'info') {
@@ -68,6 +74,14 @@ function nextSlotCost(sid) {
   return sectionDef(sid).slotCost * extra;
 }
 
+// Ventes de la dernière semaine enregistrée pour un produit
+function getLastWeekSales(productId) {
+  if (G.salesHistory.length === 0) return null;
+  const last = G.salesHistory[G.salesHistory.length - 1];
+  const item = last.items.find(i => i.productId === productId);
+  return item ? { qty: item.qty, revenue: item.revenue, profit: item.revenue - (item.qty * (item.buyPrice || 0)) } : null;
+}
+
 // ── Initialisation ──────────────────────────────────────────
 function initGame() {
   G.sections = {};
@@ -78,6 +92,7 @@ function initGame() {
   G.money = 5000;
   G.phase = 'supplier';
   G.log = []; G.salesHistory = []; G.nextItemId = 1;
+  G.weeklyForecast = { hot: [], cold: [] };
   addLog('🌱 Bienvenue dans votre jardinerie ! Bonne saison !', 'info');
   startSupplierPhase();
 }
@@ -85,8 +100,9 @@ function initGame() {
 // ── Phase fournisseurs ───────────────────────────────────────
 function startSupplierPhase() {
   applyWeeklyDecay();
-  autoRestockFromReserve();   // réassort automatique pour les articles déjà en réserve
+  autoRestockFromReserve();
   generateSupplierOffers();
+  generateWeeklyForecast();
   G.cart = {};
   ownedSections().forEach(sid => { G.cart[sid] = []; });
   G.phase = 'supplier';
@@ -98,7 +114,7 @@ function autoRestockFromReserve() {
   ownedSections().forEach(sid => {
     const sec = G.sections[sid];
 
-    // Passe 1 : types déjà présents en rayon → ajouter la quantité sans slot
+    // Passe 1 : types déjà en rayon → réassort sans nouveau slot
     sec.reserve.forEach(r => {
       if (r.qty <= 0) return;
       if (typeOnShelf(sid, r.productId)) {
@@ -124,7 +140,6 @@ function addToStock(sid, productId, qty, buyPrice, discount = 0) {
   const sec = G.sections[sid];
   const existing = sec.stock.find(s => s.productId === productId);
   if (existing) {
-    // Prix moyen pondéré
     const total = existing.qty + qty;
     existing.buyPrice = (existing.buyPrice * existing.qty + buyPrice * qty) / total;
     existing.qty      = total;
@@ -134,15 +149,10 @@ function addToStock(sid, productId, qty, buyPrice, discount = 0) {
 }
 
 // ── Génération des offres fournisseur ────────────────────────
-// Règles :
-//  - Aucun produit hors saison proposé
-//  - Semaine 1 : 1 rayon garanti avec promo (-10% ou -20%)
-//  - Semaines suivantes : 35% de chance, 1 rayon aléatoire
 function generateSupplierOffers() {
   G.supplierOffers = {};
   const owned = ownedSections();
 
-  // Déterminer le rayon promu cette semaine
   let promoSid = null;
   if (G.week === 1 || Math.random() < 0.35) {
     promoSid = owned[Math.floor(Math.random() * owned.length)];
@@ -150,7 +160,6 @@ function generateSupplierOffers() {
   G.promoSectionId = promoSid;
 
   owned.forEach(sid => {
-    // Filtrer : produits de ce rayon ET en saison (ou toute l'année)
     const products = Object.keys(CATALOG).filter(pid => {
       const p = CATALOG[pid];
       return p.section === sid && !isOutOfSeason(pid);
@@ -176,7 +185,7 @@ function generateSupplierOffers() {
         });
     }
 
-    // Appliquer promo sur 1-2 produits si c'est le rayon promu
+    // Promo sur 1-2 produits si rayon promu
     if (sid === promoSid && offers.length > 0) {
       const promoCount = 1 + (Math.random() < 0.4 ? 1 : 0);
       shuffle([...offers])
@@ -191,6 +200,61 @@ function generateSupplierOffers() {
 
     G.supplierOffers[sid] = offers;
   });
+}
+
+// ── Prévision hebdomadaire (tendance de la semaine) ───────────
+// Génère 2 produits "chauds" et 2 "froids" parmi les produits en rayon.
+// Ces prévisions influencent les ventes de endWeek() à 90%.
+function generateWeeklyForecast() {
+  G.weeklyForecast = { hot: [], cold: [] };
+  if (G.week === 1) return; // pas de données la 1ère semaine
+
+  // Candidats : produits actuellement en rayon
+  const candidates = [];
+  ownedSections().forEach(sid => {
+    const seasonMult = SEASON_DEMAND[season()][sid] || 1.0;
+    G.sections[sid].stock.forEach(item => {
+      const prod    = productDef(item.productId);
+      const inSeason = !isOutOfSeason(item.productId);
+      const lastSale  = getLastWeekSales(item.productId);
+      const lastQty   = lastSale ? lastSale.qty : 0;
+
+      // Score "chaud" : en saison, forte demande section, bonne vente passée
+      const hotScore  = (inSeason ? 1 : 0) * seasonMult * (1 + lastQty * 0.1);
+      // Score "froid" : hors saison, faible demande, peu vendu, fin de saison
+      const coldScore = (!inSeason ? 2 : 0)
+        + (nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season()) ? 1.5 : 0)
+        + (1 / (seasonMult + 0.1))
+        + (lastQty === 0 ? 1 : 0);
+
+      candidates.push({ productId: item.productId, hotScore, coldScore });
+    });
+  });
+
+  if (candidates.length === 0) return;
+
+  // Trier pour hot et cold, éviter les doublons
+  const byHot  = [...candidates].sort((a, b) => b.hotScore  - a.hotScore);
+  const byCold = [...candidates].sort((a, b) => b.coldScore - a.coldScore);
+
+  const hot  = [];
+  const cold = [];
+  const used = new Set();
+
+  for (const c of byHot) {
+    if (hot.length >= 2) break;
+    hot.push(c.productId);
+    used.add(c.productId);
+  }
+  for (const c of byCold) {
+    if (cold.length >= 2) break;
+    if (!used.has(c.productId)) {
+      cold.push(c.productId);
+      used.add(c.productId);
+    }
+  }
+
+  G.weeklyForecast = { hot, cold };
 }
 
 // ── Panier ───────────────────────────────────────────────────
@@ -225,19 +289,24 @@ function validatePurchases() {
     return { ok: false, error: `Budget insuffisant ! Commande : ${fmt(total)} — Caisse : ${fmt(G.money)}` };
   }
 
-  // Tout va en RÉSERVE (le joueur choisira ensuite ce qui va en rayon)
+  // Tout va en RÉSERVE avec promoRate conservé pour affichage allocation
   G.money -= total;
   owned.forEach(sid => {
     G.cart[sid].forEach(item => {
       const sec      = G.sections[sid];
       const existing = sec.reserve.find(r => r.productId === item.productId);
       if (existing) {
-        // Prix moyen pondéré en réserve
         const t = existing.qty + item.qty;
-        existing.buyPrice = (existing.buyPrice * existing.qty + item.unitPrice * item.qty) / t;
-        existing.qty      = t;
+        existing.buyPrice  = (existing.buyPrice * existing.qty + item.unitPrice * item.qty) / t;
+        existing.qty       = t;
+        existing.promoRate = Math.max(existing.promoRate || 0, item.promoRate || 0);
       } else {
-        sec.reserve.push({ productId: item.productId, qty: item.qty, buyPrice: item.unitPrice });
+        sec.reserve.push({
+          productId: item.productId,
+          qty:       item.qty,
+          buyPrice:  item.unitPrice,
+          promoRate: item.promoRate || 0,
+        });
       }
       const promoTxt = item.promoRate > 0 ? ` (-${Math.round(item.promoRate*100)}% promo !)` : '';
       addLog(`🛒 ${item.qty}× ${productDef(item.productId).name} → réserve${promoTxt} — ${fmt(item.qty * item.unitPrice)}`, 'buy');
@@ -250,13 +319,12 @@ function validatePurchases() {
 }
 
 // ── Phase allocation : déplacer réserve → rayon ──────────────
-// Déplace TOUTE la quantité d'un type de réserve vers le rayon
 function moveToShelf(sid, productId) {
-  const sec      = G.sections[sid];
-  const resIdx   = sec.reserve.findIndex(r => r.productId === productId);
+  const sec    = G.sections[sid];
+  const resIdx = sec.reserve.findIndex(r => r.productId === productId);
   if (resIdx === -1) return { ok: false, error: 'Article introuvable en réserve.' };
 
-  const r            = sec.reserve[resIdx];
+  const r              = sec.reserve[resIdx];
   const alreadyOnShelf = typeOnShelf(sid, productId);
 
   if (!alreadyOnShelf && freeSlots(sid) <= 0) {
@@ -269,14 +337,23 @@ function moveToShelf(sid, productId) {
   return { ok: true };
 }
 
+// confirmAllocation : simple log, c'est endWeek() qui fait la vraie transition
 function confirmAllocation() {
-  G.phase = 'market';
   addLog('🏪 Magasin ouvert !', 'info');
 }
 
-// ── Remises saisonnières ─────────────────────────────────────
+// ── Remises ─────────────────────────────────────────────────
 function setDiscount(sid, stockItemId, discountRate) {
   const item = G.sections[sid].stock.find(s => s.id === stockItemId);
+  if (item) {
+    item.discount = Math.max(0, Math.min(0.5, discountRate));
+    addLog(`🏷️ Remise ${Math.round(item.discount * 100)}% → ${productDef(item.productId).name}`, 'discount');
+  }
+}
+
+// Remise par productId (utile depuis la modal allocation)
+function setDiscountByProduct(sid, productId, discountRate) {
+  const item = G.sections[sid].stock.find(s => s.productId === productId);
   if (item) {
     item.discount = Math.max(0, Math.min(0.5, discountRate));
     addLog(`🏷️ Remise ${Math.round(item.discount * 100)}% → ${productDef(item.productId).name}`, 'discount');
@@ -300,15 +377,27 @@ function endWeek() {
       rate *= seasonMult;
       if (prod.seasonal) rate *= prod.seasonal.includes(season()) ? 1.4 : 0.3;
       if (item.discount > 0) rate *= 1 + item.discount * 2;
+
+      // Influence de la prévision hebdomadaire (90% de chance)
+      if (G.weeklyForecast.hot.includes(item.productId) && Math.random() < 0.9) rate *= 2.0;
+      if (G.weeklyForecast.cold.includes(item.productId) && Math.random() < 0.9) rate *= 0.2;
+
       rate = Math.max(MIN_SELL_RATE, Math.min(1, rate));
 
       const actualSold = Math.min(Math.max(1, Math.round(item.qty * rate)), item.qty);
-      const revenue    = actualSold * sellPrice(item.productId, item.discount);
+      const unitRev    = sellPrice(item.productId, item.discount);
+      const revenue    = actualSold * unitRev;
+      const profit     = revenue - actualSold * item.buyPrice;
 
       sectionResults.push({
-        productId: item.productId, sold: actualSold, revenue,
-        unitRevenue: sellPrice(item.productId, item.discount),
-        discount: item.discount, wasDiscounted: item.discount > 0,
+        productId:   item.productId,
+        sold:        actualSold,
+        revenue,
+        profit,
+        buyPrice:    item.buyPrice,
+        unitRevenue: unitRev,
+        discount:    item.discount,
+        wasDiscounted: item.discount > 0,
       });
 
       item.qty -= actualSold;
@@ -324,9 +413,10 @@ function endWeek() {
 
   G.weeklyResults = results;
 
-  // Enregistrer l'historique des ventes (max 8 semaines)
+  // Historique (max 8 semaines)
   const allItems = results.flatMap(r => r.items.map(i => ({
     productId: i.productId, sectionId: r.sectionId, qty: i.sold, revenue: i.revenue,
+    buyPrice: i.buyPrice,
   })));
   G.salesHistory.push({ week: G.week, seasonIdx: G.seasonIdx, items: allItems });
   if (G.salesHistory.length > 8) G.salesHistory.shift();
@@ -370,7 +460,6 @@ function checkEndOfSeasonWarnings() {
 }
 
 // ── Top ventes ───────────────────────────────────────────────
-// Retourne les N meilleures ventes sur les X dernières semaines enregistrées
 function getTopSales(n = 3, lastWeeks = 4) {
   if (G.salesHistory.length === 0) return [];
   const recent = G.salesHistory.slice(-lastWeeks);
@@ -389,7 +478,6 @@ function getTopSales(n = 3, lastWeeks = 4) {
     .map(([pid, d]) => ({ productId: pid, qty: d.qty, revenue: d.revenue, weekCount: d.weekCount }));
 }
 
-// Tendance d'un produit : compare son rang cette semaine vs la précédente
 function getSalesTrend(productId) {
   if (G.salesHistory.length < 1) return 'new';
 
@@ -404,23 +492,22 @@ function getSalesTrend(productId) {
   const rankLast = rankInWeek(last);
   const rankPrev = prev ? rankInWeek(prev) : -1;
 
-  // Saison : si le produit est saisonnier et la saison se termine bientôt → tendance basse
   const prod = productDef(productId);
   const nearSeasonEnd = nearEndOfSeason() && prod.seasonal && prod.seasonal.includes(season());
 
-  if (rankLast === -1)       return 'absent';    // pas vendu cette semaine
-  if (nearSeasonEnd)         return 'declining'; // fin de saison imminente
-  if (rankPrev === -1)       return 'new';       // première apparition
-  if (rankLast < rankPrev)   return 'up';        // monte dans le classement
-  if (rankLast > rankPrev)   return 'down';      // descend
+  if (rankLast === -1)       return 'absent';
+  if (nearSeasonEnd)         return 'declining';
+  if (rankPrev === -1)       return 'new';
+  if (rankLast < rankPrev)   return 'up';
+  if (rankLast > rankPrev)   return 'down';
   return 'stable';
 }
 
 // ── Débloquer / acheter un slot ──────────────────────────────
 function unlockSection(sid) {
   const def = sectionDef(sid);
-  if (G.sections[sid].owned)     return { ok: false, error: 'Rayon déjà ouvert.' };
-  if (G.money < def.unlockCost)  return { ok: false, error: `Budget insuffisant. Coût : ${fmt(def.unlockCost)}` };
+  if (G.sections[sid].owned)    return { ok: false, error: 'Rayon déjà ouvert.' };
+  if (G.money < def.unlockCost) return { ok: false, error: `Budget insuffisant. Coût : ${fmt(def.unlockCost)}` };
   G.money -= def.unlockCost;
   G.sections[sid].owned = true;
   addLog(`🏪 Nouveau rayon : ${def.name} !`, 'unlock');
@@ -429,10 +516,10 @@ function unlockSection(sid) {
 
 function buySlot(sid) {
   const sec = G.sections[sid];
-  if (!sec.owned)           return { ok: false, error: 'Rayon non ouvert.' };
+  if (!sec.owned)            return { ok: false, error: 'Rayon non ouvert.' };
   if (sec.slots >= MAX_SLOTS) return { ok: false, error: `Maximum (${MAX_SLOTS}) atteint.` };
   const cost = nextSlotCost(sid);
-  if (G.money < cost)       return { ok: false, error: `Budget insuffisant. Coût : ${fmt(cost)}` };
+  if (G.money < cost)        return { ok: false, error: `Budget insuffisant. Coût : ${fmt(cost)}` };
   G.money -= cost;
   sec.slots++;
   addLog(`📐 ${sectionDef(sid).name} — slot acheté (${sec.slots}/${MAX_SLOTS})`, 'unlock');
@@ -460,7 +547,7 @@ function totalStockValue() {
   let v = 0;
   Object.values(G.sections).forEach(s => {
     s.stock.forEach(i   => { v += i.qty * sellPrice(i.productId, i.discount); });
-    s.reserve.forEach(i => { v += i.qty * sellPrice(i.productId); });
+    s.reserve.forEach(i => { v += i.qty * catalogSellPrice(i.productId); });
   });
   return v;
 }
