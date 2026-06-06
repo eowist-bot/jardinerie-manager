@@ -27,8 +27,17 @@ function renderHUD() {
   el('hud-phase').textContent = phaseLabels[G.phase] || '';
 
   el('btn-supplier').style.display   = G.phase === 'supplier'   ? 'inline-flex' : 'none';
-  el('btn-allocation').style.display = G.phase === 'allocation' ? 'inline-flex' : 'none';
   el('btn-end-week').style.display   = G.phase === 'market'     ? 'inline-flex' : 'none';
+
+  if (G.phase === 'allocation') {
+    const pending = ownedSections().reduce((a, sid) => a + G.sections[sid].reserve.reduce((b, r) => b + r.qty, 0), 0);
+    el('btn-allocation').style.display = 'inline-flex';
+    el('btn-allocation').innerHTML = pending > 0
+      ? `📤 Mise en rayon <span class="btn-alloc-count">${pending}</span>`
+      : `📤 Mise en rayon · <span style="font-size:0.75rem;opacity:0.75">tout placé</span>`;
+  } else {
+    el('btn-allocation').style.display = 'none';
+  }
 }
 
 // ── Carte du magasin ─────────────────────────────────────────
@@ -39,7 +48,6 @@ function renderStoreMap() {
   Object.entries(SECTIONS_DEF).forEach(([sid, def]) => {
     const sec = G.sections[sid];
     const div = document.createElement('div');
-    div.className = 'section-tile' + (sec.owned ? ' owned' : ' locked');
     div.dataset.sid = sid;
     div.style.setProperty('--sec-color',  def.color);
     div.style.setProperty('--sec-border', def.borderColor);
@@ -54,6 +62,9 @@ function renderStoreMap() {
       const reserveQty = sec.reserve.reduce((a, r) => a + r.qty, 0);
       const hasAlloc   = G.phase === 'allocation' && reserveQty > 0;
       const isPromo    = G.phase === 'supplier' && G.promoSectionId === sid;
+      const canPlace   = hasAlloc && (sec.reserve.some(r => typeOnShelf(sid, r.productId) || freeSlots(sid) > 0));
+
+      div.className = 'section-tile owned' + (hasAlloc ? ' needs-alloc' : '') + (canPlace ? ' can-place' : '');
 
       div.innerHTML = `
         <div class="tile-header">
@@ -66,10 +77,13 @@ function renderStoreMap() {
           <div class="shelf-bar" style="width:${fillPct}%"></div>
         </div>
         <div class="tile-stats">
-          ${reserveQty > 0 ? `<span class="reserve-badge ${isSaturated(sid) ? 'saturated' : ''}">${hasAlloc ? '📤' : '🏠'} ${reserveQty}${isSaturated(sid) && !hasAlloc ? ' 🔒' : ''}</span>` : ''}
+          ${hasAlloc ? `<span class="alloc-badge${canPlace ? ' actionable' : ' full'}">📦 ${reserveQty} à placer</span>` : (reserveQty > 0 ? `<span class="reserve-badge ${isSaturated(sid) ? 'saturated' : ''}">🏠 ${reserveQty}</span>` : '')}
           ${nearEnd ? '<span class="warn-badge">⚠️ Fin saison</span>' : ''}
         </div>
-        <div class="shelf-mini">${renderMiniShelf(sid)}</div>`;
+        ${hasAlloc
+          ? `<div class="alloc-cta">Cliquez pour allouer →</div>`
+          : `<div class="shelf-mini">${renderMiniShelf(sid)}</div>`
+        }`;
     } else {
       div.innerHTML = `
         <div class="tile-header">
@@ -318,62 +332,88 @@ function renderAllocationModal(sid) {
   if (sec.reserve.length === 0) {
     showModal(`
       <h2>${def.icon} ${def.name} — Mise en rayon</h2>
-      <p class="empty-stock" style="padding:20px 0;text-align:center">Aucun article en réserve pour ce rayon.</p>
-      <div class="modal-actions"><button class="btn-secondary" onclick="closeModal()">Fermer</button></div>
+      <div class="alloc-done-banner">✅ Tout est en rayon !</div>
+      ${sec.stock.length > 0 ? `<div class="alloc-shelf">${sec.stock.map(i => { const p = productDef(i.productId); return `<div class="alloc-shelf-row">${p.icon} ${p.name} <span class="qty-chip">×${i.qty}</span></div>`; }).join('')}</div>` : ''}
+      <div class="modal-actions">
+        <button class="btn-primary" onclick="closeModal()">← Retour à la carte</button>
+      </div>
     `);
     return;
   }
 
+  // Bouton "tout mettre en rayon" si au moins un article peut aller en rayon
+  const canPlaceAll = sec.reserve.some(r => typeOnShelf(sid, r.productId) || freeSlots(sid) > 0);
+
   const reserveRows = sec.reserve.map(r => {
-    const prod    = productDef(r.productId);
-    const oos     = isOutOfSeason(r.productId);
+    const prod      = productDef(r.productId);
+    const oos       = isOutOfSeason(r.productId);
     const alreadyOn = typeOnShelf(sid, r.productId);
-    const canMove  = alreadyOn || free > 0;
-    const slotInfo = alreadyOn
-      ? '<span class="slot-tag existing">🔄 Réassort (même slot)</span>'
-      : (free > 0
-          ? `<span class="slot-tag new-slot">➕ Utilise 1 slot libre (${free} dispo)</span>`
+    // recalcul free à chaque ligne car ça change à chaque moveToShelf
+    const freeDyn   = freeSlots(sid);
+    const canMove   = alreadyOn || freeDyn > 0;
+    const slotInfo  = alreadyOn
+      ? '<span class="slot-tag existing">🔄 Réassort — même slot</span>'
+      : (freeDyn > 0
+          ? `<span class="slot-tag new-slot">➕ 1 slot libre utilisé (${freeDyn} dispo)</span>`
           : '<span class="slot-tag no-slot">⚠️ Plus de slot libre</span>');
-    const oosTag = oos ? `<span class="badge-oos" style="font-size:0.65rem">🍂 Hors saison</span>` : '';
+    const oosTag = oos ? `<span class="badge-oos">🍂 Hors saison</span>` : '';
 
     return `
-      <div class="alloc-row ${oos ? 'out-season' : ''}">
-        <span class="stock-icon">${prod.icon}</span>
-        <div class="stock-info">
-          <strong>${prod.name}</strong>
-          <small>×${r.qty} · achat ${fmt(r.buyPrice)}/u · vente ${fmt(sellPrice(r.productId))}/u</small>
-          ${slotInfo} ${oosTag}
+      <div class="alloc-row ${oos ? 'out-season' : ''} ${canMove ? '' : 'blocked'}">
+        <div class="alloc-row-left">
+          <span class="stock-icon">${prod.icon}</span>
+          <div class="stock-info">
+            <strong>${prod.name}</strong>
+            <small>×${r.qty} · achat ${fmt(r.buyPrice)}/u · vente ${fmt(sellPrice(r.productId))}/u</small>
+            <div class="alloc-tags">${slotInfo}${oosTag}</div>
+          </div>
         </div>
-        <button class="btn-alloc ${canMove ? '' : 'disabled'}"
+        <button class="btn-alloc-place ${canMove ? '' : 'disabled'}"
           onclick="${canMove ? `doMoveToShelf('${sid}', '${r.productId}')` : ''}">
-          ${canMove ? '▶ Mettre en rayon' : '⛔ Pas de slot'}
+          ${canMove ? '📤 Mettre en rayon' : '⛔ Slot plein'}
         </button>
       </div>`;
   }).join('');
 
-  // Stock déjà en rayon (pour visualiser l'état)
+  // Aperçu du rayon actuel
   const shelfPreview = sec.stock.length === 0
-    ? `<p class="empty-stock">Rayon vide.</p>`
+    ? `<p class="empty-stock" style="padding:6px 0">Rayon vide pour l'instant.</p>`
     : sec.stock.map(i => {
         const p = productDef(i.productId);
         return `<div class="alloc-shelf-row">${p.icon} ${p.name} <span class="qty-chip">×${i.qty}</span></div>`;
       }).join('');
 
   showModal(`
-    <h2>${def.icon} ${def.name} — Mise en rayon</h2>
-    <div class="modal-stats-row">
-      <span>Slots : ${used}/${total} · ${free} libre${free !== 1 ? 's' : ''}</span>
-      <span>Réserve : ${reserveQty} article(s)</span>
+    <div class="alloc-modal-header">
+      <div>
+        <h2>${def.icon} ${def.name} — Mise en rayon</h2>
+        <div class="alloc-slot-bar">
+          ${Array.from({length: total}, (_, i) =>
+            `<div class="slot-pip ${i < used ? 'used' : 'free'}"></div>`
+          ).join('')}
+          <span class="alloc-slot-label">${used}/${total} slots occupés · ${free} libre${free !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+      <div class="alloc-reserve-count">
+        <span class="alloc-reserve-num">${reserveQty}</span>
+        <span class="alloc-reserve-label">article${reserveQty > 1 ? 's' : ''}<br>en réserve</span>
+      </div>
     </div>
 
-    <h3>📦 En réserve — choisissez ce que vous mettez en rayon</h3>
+    ${canPlaceAll ? `
+    <button class="btn-alloc-all" onclick="doMoveAllToShelf('${sid}')">
+      📤 Tout mettre en rayon
+    </button>` : ''}
+
     <div class="alloc-list">${reserveRows}</div>
 
-    <h3>🛍️ Déjà en rayon</h3>
-    <div class="alloc-shelf">${shelfPreview}</div>
+    <details class="alloc-shelf-details">
+      <summary>🛍️ Déjà en rayon (${sec.stock.length} type${sec.stock.length !== 1 ? 's' : ''})</summary>
+      <div class="alloc-shelf">${shelfPreview}</div>
+    </details>
 
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeModal()">Fermer</button>
+      <button class="btn-secondary" onclick="closeModal()">← Retour à la carte</button>
     </div>
   `);
 }
@@ -381,6 +421,20 @@ function renderAllocationModal(sid) {
 function doMoveToShelf(sid, productId) {
   const res = moveToShelf(sid, productId);
   if (!res.ok) { showToast(res.error, 'error'); return; }
+  renderAllocationModal(sid);
+  renderStoreMap();
+}
+
+function doMoveAllToShelf(sid) {
+  const sec = G.sections[sid];
+  // copie car on modifie la réserve pendant l'itération
+  const toPlace = [...sec.reserve].map(r => r.productId);
+  let placed = 0;
+  toPlace.forEach(pid => {
+    const res = moveToShelf(sid, pid);
+    if (res.ok) placed++;
+  });
+  if (placed === 0) showToast('Aucun article placé (slots pleins)', 'error');
   renderAllocationModal(sid);
   renderStoreMap();
 }
@@ -714,23 +768,68 @@ function showToast(msg, type = 'info') {
 function bindGlobalEvents() {
   el('btn-end-week').addEventListener('click', doEndWeek);
   el('btn-supplier').addEventListener('click', openSupplierPanel);
-  el('btn-allocation').addEventListener('click', () => {
-    showModal(`
-      <h2>📤 Mise en rayon</h2>
-      <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:14px">
-        Cliquez sur un rayon de la carte pour choisir ce que vous y mettez.
-        Laissez en réserve ce que vous ne souhaitez pas exposer encore.
-      </p>
-      <div class="modal-actions">
-        <button class="btn-primary" onclick="closeModal(); doConfirmAllocation()">🏪 Ouvrir le magasin</button>
-        <button class="btn-secondary" onclick="closeModal()">Continuer à allouer</button>
-      </div>
-    `);
-  });
+  el('btn-allocation').addEventListener('click', openAllocationOverview);
   el('btn-reserve').addEventListener('click', openReserveModal);
   el('modal-overlay').addEventListener('click', e => {
     if (e.target === el('modal-overlay')) closeModal();
   });
+}
+
+// ── Vue globale allocation ────────────────────────────────────
+function openAllocationOverview() {
+  const owned = ownedSections();
+  const withReserve    = owned.filter(sid => G.sections[sid].reserve.length > 0);
+  const withoutReserve = owned.filter(sid => G.sections[sid].reserve.length === 0);
+  const totalPending   = withReserve.reduce((a, sid) => a + G.sections[sid].reserve.reduce((b, r) => b + r.qty, 0), 0);
+
+  const pendingRows = withReserve.map(sid => {
+    const def    = sectionDef(sid);
+    const sec    = G.sections[sid];
+    const qty    = sec.reserve.reduce((a, r) => a + r.qty, 0);
+    const free   = freeSlots(sid);
+    const canAny = sec.reserve.some(r => typeOnShelf(sid, r.productId) || free > 0);
+    return `
+      <div class="alloc-overview-row ${canAny ? '' : 'blocked'}">
+        <span class="alloc-ov-icon">${def.icon}</span>
+        <div class="alloc-ov-info">
+          <strong>${def.name}</strong>
+          <small>${qty} article${qty>1?'s':''} en réserve · ${free} slot${free!==1?'s':''} libre${free!==1?'s':''}</small>
+        </div>
+        <button class="btn-alloc-go ${canAny ? '' : 'disabled'}"
+          onclick="${canAny ? `closeModal(); openAllocationModal('${sid}')` : ''}">
+          ${canAny ? '📤 Allouer →' : '🔒 Complet'}
+        </button>
+      </div>`;
+  }).join('');
+
+  const doneRows = withoutReserve.map(sid => {
+    const def = sectionDef(sid);
+    return `<div class="alloc-overview-row done"><span>${def.icon} ${def.name}</span><span class="alloc-done-check">✅</span></div>`;
+  }).join('');
+
+  showModal(`
+    <h2>📤 Mise en rayon</h2>
+    <p class="modal-desc">Cliquez sur chaque rayon pour choisir ce que vous exposez. Ce qui reste en réserve sera réassorti automatiquement la semaine prochaine.</p>
+
+    ${totalPending > 0 ? `
+    <div class="alloc-progress-banner">
+      <strong>${totalPending} article${totalPending>1?'s':''}</strong> en attente dans ${withReserve.length} rayon${withReserve.length>1?'s':''}
+    </div>
+    <div class="alloc-overview-list">${pendingRows}</div>` : ''}
+
+    ${withoutReserve.length > 0 ? `
+    <details ${withReserve.length === 0 ? 'open' : ''}>
+      <summary style="font-size:0.82rem;color:var(--text-dim);cursor:pointer;margin:10px 0">
+        ✅ Rayons sans réserve (${withoutReserve.length})
+      </summary>
+      <div class="alloc-overview-done">${doneRows}</div>
+    </details>` : ''}
+
+    <div class="modal-actions" style="margin-top:20px;border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn-secondary" onclick="closeModal()">← Continuer à allouer</button>
+      <button class="btn-open-store" onclick="closeModal(); doConfirmAllocation()">🏪 Ouvrir le magasin</button>
+    </div>
+  `);
 }
 
 function doConfirmAllocation() {
