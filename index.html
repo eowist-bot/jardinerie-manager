@@ -8,46 +8,99 @@
 </head>
 <body>
 
-<div id="app">
+<!-- ── Écran d'accueil ──────────────────────────────────────── -->
+<div id="home-screen">
+  <img id="home-bg" src="img/home.jpg" alt="" aria-hidden="true">
+  <div id="home-card">
+    <div id="home-logo">🌿</div>
+    <h1 id="home-title">Ma Jardinerie</h1>
+    <p id="home-subtitle">Gérez votre jardinerie, saison après saison.</p>
+    <div id="home-actions">
+      <button id="btn-new-game" class="home-btn primary">🌱 Nouvelle partie</button>
+      <button id="btn-continue" class="home-btn secondary" style="display:none">▶ Reprendre la partie</button>
+    </div>
+    <div id="home-save-info"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
 
   <!-- ── HUD ──────────────────────────────────────────────── -->
   <header id="hud">
-    <h1>🌿 Ma Jardinerie</h1>
 
-    <div class="hud-chip money">
-      <span class="chip-label">Caisse</span>
-      <span id="hud-money">5 000 €</span>
-    </div>
+    <!-- Ligne 1 : logo + indicateurs + options -->
+    <div class="hud-row hud-row-top">
+      <h1>🌿 Ma Jardinerie</h1>
 
-    <div class="hud-chip season">
-      <span id="season-icon">🌱</span>
-      <span id="hud-season">Printemps</span>
-      <span class="chip-label" id="hud-season-week">(1/13)</span>
-    </div>
+      <div class="hud-chip money">
+        <span class="chip-label">Caisse</span>
+        <span id="hud-money">5 000 €</span>
+      </div>
 
-    <div class="hud-chip">
-      <span class="chip-label">⏱</span>
-      <span id="hud-week">Semaine 1</span>
-    </div>
+      <div class="hud-chip season">
+        <span id="season-icon">🌱</span>
+        <span id="hud-season">Printemps</span>
+        <span class="chip-label" id="hud-season-week">(1/13)</span>
+      </div>
 
-    <div class="hud-chip stock">
-      <span class="chip-label">Stock</span>
-      <span id="hud-stock-value">0 €</span>
-    </div>
+      <div class="hud-chip">
+        <span class="chip-label">⏱</span>
+        <span id="hud-week">Semaine 1</span>
+      </div>
 
-    <span id="hud-phase"></span>
+      <div class="hud-chip stock">
+        <span class="chip-label">Stock</span>
+        <span id="hud-stock-value">0 €</span>
+      </div>
 
-    <div class="hud-actions">
-      <button id="btn-reserve" class="btn-hud secondary">
-        📦 Réserve
+      <div class="hud-chip weather" id="hud-weather" style="display:none">
+        <span id="hud-weather-icon">☀️</span>
+        <div class="weather-info">
+          <span id="hud-weather-label"></span>
+          <span class="weather-next" id="hud-weather-next"></span>
+        </div>
+      </div>
+
+      <div class="hud-chip event" id="hud-event" style="display:none"></div>
+      <div class="hud-chip reputation" id="hud-reputation" title="Réputation"></div>
+      <div class="hud-chip parking" id="hud-parking" title="Parking — cliquez pour gérer" onclick="openParkingModal()" style="cursor:pointer"></div>
+
+      <button id="btn-options" class="btn-hud options hud-options-top" title="Options">
+        ⚙️
       </button>
-      <button id="btn-supplier" class="btn-hud secondary">
-        🏪 Voir commandes
-      </button>
-      <button id="btn-allocation" class="btn-hud secondary" style="display:none">
-        📤 Mise en rayon
-      </button>
     </div>
+
+    <!-- Ligne 2 : phase en cours + boutons d'action -->
+    <div class="hud-row hud-row-bottom">
+      <span id="hud-phase"></span>
+      <div class="hud-actions">
+        <button id="btn-reserve" class="btn-hud secondary">
+          📦 Réserve
+        </button>
+        <button id="btn-supplier" class="btn-hud secondary">
+          🏪 Voir commandes
+        </button>
+        <button id="btn-objectives" class="btn-hud secondary" style="display:none">
+          🎯 Objectifs
+        </button>
+        <button id="btn-ad" class="btn-hud secondary" style="display:none">
+          📢 Publicité
+        </button>
+        <button id="btn-allocation" class="btn-hud secondary" style="display:none">
+          📤 Mise en rayon
+        </button>
+        <button id="btn-gazette" class="btn-hud btn-gazette-hud" title="La Gazette de la Centrale — résumé de la semaine">
+          📰 Gazette
+        </button>
+        <button id="btn-chart" class="btn-hud secondary" title="Statistiques de ventes">
+          📈
+        </button>
+        <button id="btn-badges" class="btn-hud secondary" title="Mes badges — cliquez pour voir vos récompenses">
+          🏅
+        </button>
+      </div>
+    </div>
+
   </header>
 
   <!-- ── Corps ────────────────────────────────────────────── -->
@@ -55,7 +108,14 @@
 
     <!-- Carte du magasin -->
     <div id="store-area">
-      <div id="store-map"></div>
+      <div id="store-building">
+        <div id="store-map"></div>
+        <div id="store-entrance">
+          <div class="entrance-gate">🚪</div>
+          <div class="entrance-label">Entrée principale</div>
+          <div class="entrance-gate">🚪</div>
+        </div>
+      </div>
     </div>
 
     <!-- Journal -->
@@ -65,11 +125,17 @@
         <span id="log-toggle-icon">▶</span>
       </div>
       <div id="log"></div>
+      <div id="app-version">v0.7.0</div>
     </aside>
 
   </div><!-- /main-body -->
 
 </div><!-- /app -->
+
+<!-- ── Audio ──────────────────────────────────────────────── -->
+<audio id="bg-music" loop preload="auto">
+  <source src="audio/musique-ambiance.mp3" type="audio/mpeg">
+</audio>
 
 <!-- ── Modal ──────────────────────────────────────────────── -->
 <div id="modal-overlay">
@@ -79,6 +145,7 @@
 <!-- ── Scripts ───────────────────────────────────────────── -->
 <script src="data/catalog.js"></script>
 <script src="js/engine.js"></script>
+<script src="js/tutorial.js"></script>
 <script src="js/ui.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', uiInit);

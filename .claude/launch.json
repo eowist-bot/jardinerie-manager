@@ -1,11 +1,11 @@
-{
+﻿{
   "version": "0.0.1",
   "configurations": [
     {
       "name": "jardinerie",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "-p", "3030", "D:\\Claude-projet Jardinerie"],
-      "port": 3030
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-NonInteractive", "-File", ".claude\\serve.ps1"],
+      "port": 5500
     }
   ]
 }

@@ -105,6 +105,10 @@ const CATALOG = {
   'plante-carnivore':  { name:'Plantes carnivores',   section:'serre-chaude',   price:14, icon:'🪲', seasonal:['Printemps','Été'] },
   'anthurium':         { name:'Anthurium',            section:'serre-chaude',   price:16, icon:'🌺', seasonal:['Hiver'] },
   'bromelia':          { name:'Broméliacées',         section:'serre-chaude',   price:10, icon:'🌻', seasonal:null },
+  'monstera':          { name:'Monstera & Philodendrons', section:'serre-chaude', price:20, icon:'🍃', seasonal:null },
+  'calathea':          { name:'Calathéas & Marantas', section:'serre-chaude',   price:15, icon:'🌿', seasonal:null },
+  'bonsai':            { name:'Bonsaïs',              section:'serre-chaude',   price:35, icon:'🎋', seasonal:['Automne','Hiver'] },
+  'plante-air':        { name:'Plantes dépolluantes', section:'serre-chaude',   price:12, icon:'💨', seasonal:null },
 
   // ── SERRE FROIDE ─────────────────────────────────────────
   'geranium':          { name:'Géraniums',            section:'serre-froide',   price:4,  icon:'🌹', seasonal:['Printemps','Été'] },
@@ -115,6 +119,10 @@ const CATALOG = {
   'pensee':            { name:'Pensées',              section:'serre-froide',   price:2,  icon:'💐', seasonal:['Automne','Printemps'] },
   'hydrangee':         { name:'Hortensias',           section:'serre-froide',   price:12, icon:'💐', seasonal:['Printemps','Été'] },
   'chrysantheme':      { name:'Chrysanthèmes',        section:'serre-froide',   price:5,  icon:'🌼', seasonal:['Automne'] },
+  'impatiens':         { name:'Impatiens',            section:'serre-froide',   price:3,  icon:'🌺', seasonal:['Printemps','Été'] },
+  'dahlia':            { name:'Dahlias',              section:'serre-froide',   price:8,  icon:'🌻', seasonal:['Été','Automne'] },
+  'primevere':         { name:'Primevères',           section:'serre-froide',   price:4,  icon:'🌼', seasonal:['Hiver','Printemps'] },
+  'hellebore':         { name:'Hellébores',           section:'serre-froide',   price:10, icon:'🌿', seasonal:['Hiver','Printemps'] },
 
   // ── PÉPINIÈRE ────────────────────────────────────────────
   'arbuste-fruitier':  { name:'Arbustes fruitiers',   section:'pepiniere',      price:18, icon:'🍓', seasonal:['Printemps','Automne'] },
@@ -122,6 +130,13 @@ const CATALOG = {
   'arbre-ornemental':  { name:'Arbres ornementaux',   section:'pepiniere',      price:35, icon:'🌳', seasonal:['Printemps'] },
   'conifere':          { name:'Conifères',            section:'pepiniere',      price:20, icon:'🎄', seasonal:['Automne','Hiver'] },
   'rosier-tige':       { name:'Rosiers sur tige',     section:'pepiniere',      price:28, icon:'🌹', seasonal:['Printemps'] },
+  'bambou':            { name:'Bambous',              section:'pepiniere',      price:25, icon:'🎍', seasonal:null },
+  'graminee':          { name:'Graminées ornementales',section:'pepiniere',     price:12, icon:'🌾', seasonal:['Printemps','Été','Automne'] },
+  'lilas':             { name:'Lilas & Spirées',      section:'pepiniere',      price:18, icon:'💜', seasonal:['Printemps'] },
+  'hebe':              { name:'Hébes & Pittosporums', section:'pepiniere',      price:15, icon:'🌿', seasonal:null },
+  'grimpante':         { name:'Plantes grimpantes',   section:'pepiniere',      price:16, icon:'🍃', seasonal:['Printemps','Été'] },
+  'palmier-ext':       { name:'Palmiers extérieur',   section:'pepiniere',      price:45, icon:'🌴', seasonal:['Printemps','Été'] },
+  'hydrangee-arb':     { name:'Hortensias arbustifs', section:'pepiniere',      price:22, icon:'💐', seasonal:['Printemps','Été'] },
 
   // ── DÉCORATION ──────────────────────────────────────────
   'bougie':            { name:'Bougies parfumées',    section:'decoration',     price:8,  icon:'🕯️', seasonal:['Automne','Hiver'] },
@@ -130,26 +145,54 @@ const CATALOG = {
   'lanterne':          { name:'Lanternes',            section:'decoration',     price:12, icon:'🏮', seasonal:['Automne','Hiver'] },
   'guirlande':         { name:'Guirlandes lumineuses',section:'decoration',     price:10, icon:'✨', seasonal:['Hiver'] },
   'cadre-nature':      { name:'Cadres & tableaux',    section:'decoration',     price:22, icon:'🖼️', seasonal:null },
+  'statue-jardin':     { name:'Statues & figurines',  section:'decoration',     price:25, icon:'🗿', seasonal:null },
+  'mobile-carillon':   { name:'Carillons & mobiles',  section:'decoration',     price:14, icon:'🎐', seasonal:null },
+  'coussin-ext':       { name:'Coussins extérieur',   section:'decoration',     price:20, icon:'🪑', seasonal:['Printemps','Été'] },
+  'eclairage-ext':     { name:'Éclairage extérieur',  section:'decoration',     price:18, icon:'💡', seasonal:null },
+  'deco-noel':         { name:'Décorations de Noël',  section:'decoration',     price:12, icon:'🎄', seasonal:['Hiver'] },
+  'panneau-ardoise':   { name:'Panneaux & ardoises',  section:'decoration',     price:10, icon:'🪧', seasonal:null },
 
   // ── POTERIES NATURELLES ──────────────────────────────────
   'pot-terracotta':    { name:'Pots en terre cuite',  section:'poteries-naturelle', price:8,  icon:'🏺', seasonal:null },
-  'jardiniere-bois':   { name:'Jardinières en bois',  section:'poteries-naturelle', price:22, icon:'🪵', seasonal:['Printemps','Été'] },
+  'jardiniere-bois':   { name:'Jardinières en bois',  section:'poteries-naturelle', price:22, icon:'🪵', seasonal:null },
   'suspension-macrame':{ name:'Suspensions macramé',  section:'poteries-naturelle', price:16, icon:'🪢', seasonal:null },
   'pot-ceramique':     { name:'Poteries céramique',   section:'poteries-naturelle', price:18, icon:'🫙', seasonal:null },
-  'pot-pierre':        { name:'Bacs en pierre reconstituée', section:'poteries-naturelle', price:28, icon:'🪨', seasonal:['Printemps','Été'] },
+  'pot-pierre':        { name:'Bacs en pierre',       section:'poteries-naturelle', price:28, icon:'🪨', seasonal:null },
+  'pot-zinc':          { name:'Pots en zinc',         section:'poteries-naturelle', price:15, icon:'🪣', seasonal:null },
+  'pot-bambou':        { name:'Pots en bambou',       section:'poteries-naturelle', price:12, icon:'🎍', seasonal:null },
+  'vasque-granit':     { name:'Vasques en granit',    section:'poteries-naturelle', price:35, icon:'⛲', seasonal:null },
+  'pot-emaille':       { name:'Pots émaillés',        section:'poteries-naturelle', price:20, icon:'🎨', seasonal:null },
+  'bac-ardoise':       { name:'Bacs en ardoise',      section:'poteries-naturelle', price:28, icon:'🖤', seasonal:null },
+  'cache-pot-osier':   { name:'Cache-pots osier',     section:'poteries-naturelle', price:14, icon:'🧺', seasonal:null },
+  'jardiniere-fer':    { name:'Jardinières fer forgé',section:'poteries-naturelle', price:25, icon:'⚙️', seasonal:null },
 
   // ── POTERIES PLASTIQUE ───────────────────────────────────
   'pot-plastique':     { name:'Pots en plastique',    section:'poteries-plastique', price:3,  icon:'🪣', seasonal:null },
-  'jardiniere-plast':  { name:'Jardinières plastique',section:'poteries-plastique', price:12, icon:'🧺', seasonal:['Printemps','Été'] },
+  'jardiniere-plast':  { name:'Jardinières plastique',section:'poteries-plastique', price:12, icon:'🧺', seasonal:null },
   'cache-pot-design':  { name:'Cache-pots design',    section:'poteries-plastique', price:12, icon:'🪴', seasonal:null },
-  'bac-resine':        { name:'Bacs en résine',       section:'poteries-plastique', price:18, icon:'🫙', seasonal:['Printemps','Été'] },
+  'bac-resine':        { name:'Bacs en résine',       section:'poteries-plastique', price:18, icon:'🫙', seasonal:null },
+  'pot-color':         { name:'Pots colorés',         section:'poteries-plastique', price:5,  icon:'🎨', seasonal:null },
+  'bac-rectangulaire': { name:'Bacs rectangulaires',  section:'poteries-plastique', price:15, icon:'📦', seasonal:null },
+  'jardiniere-balcon': { name:'Jardinières balcon',   section:'poteries-plastique', price:10, icon:'🏠', seasonal:null },
+  'pot-geant':         { name:'Pots géants',          section:'poteries-plastique', price:22, icon:'🫙', seasonal:null },
+  'suspension-plast':  { name:'Suspensions plastique',section:'poteries-plastique', price:8,  icon:'🪝', seasonal:null },
+  'cache-pot-uni':     { name:'Cache-pots unis',      section:'poteries-plastique', price:6,  icon:'🪣', seasonal:null },
+  'soucoupe-plateau':  { name:'Soucoupes & plateaux', section:'poteries-plastique', price:4,  icon:'🫓', seasonal:null },
+  'pot-autoarrosant':  { name:'Pots auto-arrosants',  section:'poteries-plastique', price:18, icon:'💧', seasonal:null },
 
   // ── OUTILS ───────────────────────────────────────────────
   'secateur':          { name:'Sécateurs',            section:'outils',         price:14, icon:'✂️', seasonal:null },
-  'beche-rateau':      { name:'Bêches & Râteaux',     section:'outils',         price:18, icon:'⛏️', seasonal:['Printemps','Été'] },
-  'arrosoir':          { name:'Arrosoirs',            section:'outils',         price:12, icon:'🪣', seasonal:['Printemps','Été'] },
+  'beche-rateau':      { name:'Bêches & Râteaux',     section:'outils',         price:18, icon:'⛏️', seasonal:null },
+  'arrosoir':          { name:'Arrosoirs',            section:'outils',         price:12, icon:'🪣', seasonal:null },
   'gants':             { name:'Gants de jardin',      section:'outils',         price:6,  icon:'🧤', seasonal:null },
-  'tondeuse':          { name:'Tondeuses',            section:'outils',         price:85, icon:'🌿', seasonal:['Printemps','Été'] },
+  'tondeuse':          { name:'Tondeuses',            section:'outils',         price:85, icon:'🌿', seasonal:null },
+  'taille-haie':       { name:'Taille-haies',         section:'outils',         price:65, icon:'🌳', seasonal:null },
+  'pulverisateur':     { name:'Pulvérisateurs',       section:'outils',         price:15, icon:'🧴', seasonal:null },
+  'sac-jardinage':     { name:'Sacs & tabliers',      section:'outils',         price:12, icon:'🎒', seasonal:null },
+  'attaches-tuteurs':  { name:'Attaches & tuteurs',   section:'outils',         price:4,  icon:'🪵', seasonal:null },
+  'coupe-bordures':    { name:'Coupe-bordures',       section:'outils',         price:35, icon:'✂️', seasonal:null },
+  'brouette':          { name:'Brouettes',            section:'outils',         price:55, icon:'🛒', seasonal:null },
+  'bache-filet':       { name:'Bâches & filets',      section:'outils',         price:10, icon:'🕸️', seasonal:null },
 
   // ── PRODUITS JARDIN ──────────────────────────────────────
   'engrais':           { name:'Engrais',              section:'produits-jardin',price:7,  icon:'💊', seasonal:['Printemps','Été'] },
@@ -157,6 +200,13 @@ const CATALOG = {
   'semences':          { name:'Semences',             section:'produits-jardin',price:3,  icon:'🌾', seasonal:['Printemps'] },
   'bulbes':            { name:'Bulbes',               section:'produits-jardin',price:5,  icon:'🧅', seasonal:['Automne'] },
   'defoliant':         { name:'Désherbants bio',      section:'produits-jardin',price:8,  icon:'🌿', seasonal:['Printemps','Été'] },
+  'antiparasitaire':   { name:'Antiparasitaires',     section:'produits-jardin',price:11, icon:'🐛', seasonal:['Printemps','Été'] },
+  'gazon-graine':      { name:'Graines de gazon',     section:'produits-jardin',price:8,  icon:'🌱', seasonal:['Printemps','Automne'] },
+  'hormone-bouture':   { name:'Hormones bouturage',   section:'produits-jardin',price:6,  icon:'🧪', seasonal:['Printemps','Été'] },
+  'piege-insecte':     { name:'Pièges à insectes',    section:'produits-jardin',price:7,  icon:'🪤', seasonal:['Printemps','Été'] },
+  'repulsif-animal':   { name:'Répulsifs animaux',    section:'produits-jardin',price:8,  icon:'🦊', seasonal:null },
+  'amendement':        { name:'Amendements calcaires',section:'produits-jardin',price:6,  icon:'🪨', seasonal:['Automne','Printemps'] },
+  'activateur-compost':{ name:'Activateur compost',   section:'produits-jardin',price:9,  icon:'♻️', seasonal:['Printemps','Automne'] },
 
   // ── TERREAU ──────────────────────────────────────────────
   'terreau-univ':      { name:'Terreau universel',    section:'terreau',        price:6,  icon:'🌱', seasonal:null },
@@ -164,6 +214,13 @@ const CATALOG = {
   'substrat-cactus':   { name:'Substrat cactus',      section:'terreau',        price:7,  icon:'🌵', seasonal:null },
   'compost':           { name:'Compost',              section:'terreau',        price:9,  icon:'♻️', seasonal:['Printemps','Automne'] },
   'paillage':          { name:'Paillage',             section:'terreau',        price:8,  icon:'🪵', seasonal:['Printemps','Été'] },
+  'terreau-tomates':   { name:'Terreau tomates & légumes', section:'terreau',   price:7,  icon:'🍅', seasonal:['Printemps','Été'] },
+  'terreau-rosiers':   { name:'Terreau rosiers',      section:'terreau',        price:8,  icon:'🌹', seasonal:['Printemps'] },
+  'terreau-semis':     { name:'Terreau à semis',      section:'terreau',        price:5,  icon:'🌾', seasonal:['Printemps'] },
+  'hydrogel':          { name:'Hydrogel rétenteur',   section:'terreau',        price:6,  icon:'💧', seasonal:['Printemps','Été'] },
+  'argile-expansee':   { name:'Argile expansée',      section:'terreau',        price:6,  icon:'🪨', seasonal:null },
+  'fibre-coco':        { name:'Fibre de coco',        section:'terreau',        price:7,  icon:'🥥', seasonal:null },
+  'vermiculite':       { name:'Vermiculite & Perlite',section:'terreau',        price:6,  icon:'✨', seasonal:null },
 
   // ── ANIMALERIE ───────────────────────────────────────────
   'poisson-rouge':     { name:'Poissons rouges',      section:'animalerie',     price:3,  icon:'🐠', seasonal:null },
@@ -171,6 +228,13 @@ const CATALOG = {
   'hamster-lapin':     { name:'Hamsters & lapins',    section:'animalerie',     price:15, icon:'🐹', seasonal:null },
   'insecte-auxiliaire':{ name:'Insectes auxiliaires', section:'animalerie',     price:5,  icon:'🐞', seasonal:['Printemps','Été'] },
   'nourriture-animal': { name:'Nourriture animale',   section:'animalerie',     price:4,  icon:'🥫', seasonal:null },
+  'tortue-aquatique':  { name:'Tortues aquatiques',   section:'animalerie',     price:20, icon:'🐢', seasonal:['Printemps','Été'] },
+  'aquarium-kit':      { name:'Kits aquarium',        section:'animalerie',     price:45, icon:'🐟', seasonal:null },
+  'accessoire-cage':   { name:'Accessoires cage',     section:'animalerie',     price:8,  icon:'🏠', seasonal:null },
+  'nichoir-mangeoire': { name:'Nichoirs & mangeoires',section:'animalerie',     price:15, icon:'🐦', seasonal:['Automne','Hiver'] },
+  'reptile':           { name:'Reptiles',             section:'animalerie',     price:35, icon:'🦎', seasonal:null },
+  'anti-nuisible-jard':{ name:'Anti-nuisibles jardin',section:'animalerie',     price:7,  icon:'🐀', seasonal:['Printemps','Été'] },
+  'produit-aquarium':  { name:'Produits aquarium',    section:'animalerie',     price:6,  icon:'💧', seasonal:null },
 
   // ── BASSIN ───────────────────────────────────────────────
   'plante-aquatique':  { name:'Plantes aquatiques',   section:'bassin',         price:8,  icon:'🪷', seasonal:['Printemps','Été'] },
@@ -178,6 +242,13 @@ const CATALOG = {
   'poisson-bassin':    { name:'Poissons de bassin',   section:'bassin',         price:6,  icon:'🐡', seasonal:['Printemps','Été'] },
   'traitement-eau':    { name:'Traitement eau',       section:'bassin',         price:12, icon:'💧', seasonal:null },
   'fontaine-deco':     { name:'Fontaines décoratives',section:'bassin',         price:55, icon:'⛲', seasonal:['Printemps','Été'] },
+  'liner-bache':       { name:'Liners & bâches',      section:'bassin',         price:25, icon:'🗺️', seasonal:['Printemps','Été'] },
+  'eclairage-bassin':  { name:'Éclairage LED bassin', section:'bassin',         price:28, icon:'💡', seasonal:null },
+  'nenuphar':          { name:'Nénuphars',            section:'bassin',         price:12, icon:'🌸', seasonal:['Printemps','Été'] },
+  'algicide':          { name:'Algicides',            section:'bassin',         price:10, icon:'🧪', seasonal:['Printemps','Été'] },
+  'filet-bassin':      { name:'Filets de protection', section:'bassin',         price:15, icon:'🕸️', seasonal:null },
+  'oxygenateur':       { name:'Oxygénateurs',         section:'bassin',         price:8,  icon:'💨', seasonal:['Printemps','Été'] },
+  'pierre-aquatique':  { name:'Pierres & décors bassin', section:'bassin',      price:18, icon:'🪨', seasonal:null },
 };
 
 // Multiplicateurs de vente par saison et par section
